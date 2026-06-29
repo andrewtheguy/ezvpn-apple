@@ -1,0 +1,76 @@
+# XcodeGen spec for the ezvpn iOS POC.
+#
+# Generate the Xcode project with:   xcodegen generate
+# Then open Ezvpn.xcodeproj, select your signing Team on BOTH targets, and run
+# on a *real device* (a Packet Tunnel Provider cannot run in the Simulator).
+#
+# The Rust static library + header come from the sibling ezvpn repo:
+#   cd ../ezvpn && ./build-ios.sh release
+# which stages vendor/libezvpn.a and vendor/ezvpn.h here.
+name: Ezvpn
+
+options:
+  bundleIdPrefix: com.example.ezvpn
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    # ---- SET THIS to your Apple Developer Team ID, or set it in Xcode. ----
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+targets:
+  EzvpnApp:
+    type: application
+    platform: iOS
+    sources:
+      - Sources/EzvpnApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ezvpn
+        CODE_SIGN_ENTITLEMENTS: Sources/EzvpnApp/EzvpnApp.entitlements
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        MARKETING_VERSION: "0.0.1"
+        CURRENT_PROJECT_VERSION: "1"
+    dependencies:
+      - target: PacketTunnel
+        embed: true
+
+  PacketTunnel:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Sources/PacketTunnel
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ezvpn.PacketTunnel
+        CODE_SIGN_ENTITLEMENTS: Sources/PacketTunnel/PacketTunnel.entitlements
+        INFOPLIST_FILE: Sources/PacketTunnel/Info.plist
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/PacketTunnel/Bridging-Header.h
+        # Static Rust lib + its system dependencies.
+        LIBRARY_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/vendor
+        HEADER_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/vendor
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lezvpn
+          - -lresolv
+          - -lc++
+          - -framework
+          - Security
+          - -framework
+          - SystemConfiguration
+        MARKETING_VERSION: "0.0.1"
+        CURRENT_PROJECT_VERSION: "1"
+    dependencies:
+      - sdk: NetworkExtension.framework
