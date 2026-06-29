@@ -7,8 +7,8 @@ struct ContentView: View {
     @State private var alpnToken = ""
     @State private var authToken = ""
     @State private var relayURLs = ""
-    // Default split-tunnel routes: RFC1918 private ranges only.
-    @State private var routes = "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16"
+    // IPv4 split-tunnel routes (e.g. "10.0.0.0/8"). Empty = no IPv4 routing.
+    @State private var routes = ""
     // IPv6 split-tunnel routes (e.g. the server's ULA prefix). Empty = no IPv6.
     @State private var routes6 = ""
 
