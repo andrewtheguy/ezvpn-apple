@@ -5,23 +5,31 @@ import Combine
 /// Drives the on-device VPN configuration and the tunnel session via
 /// NetworkExtension. The actual networking happens in the PacketTunnel
 /// extension; this class only installs the configuration and starts/stops it.
+///
+/// The OS is the source of truth for connection state: `status` mirrors
+/// `NEVPNConnection.status`, so the UI stays in sync no matter where the
+/// tunnel was started or stopped from (this app, Settings > VPN, or the OS
+/// tearing it down) — the same model the WireGuard app uses.
 @MainActor
 final class VPNController: ObservableObject {
     /// Bundle id of the Packet Tunnel extension (must match project.yml).
     private let providerBundleID = "com.example.ezvpn.PacketTunnel"
 
-    @Published var status: String = "idle"
+    /// Mirrors the system's connection status. `.invalid` until a configuration
+    /// exists (or after it is deleted in Settings).
+    @Published private(set) var status: NEVPNStatus = .invalid
+    /// When the current session connected, for a "connected since" display.
+    @Published private(set) var connectedDate: Date?
+    /// The configuration last saved to VPN preferences, used to prefill the
+    /// form on launch so the UI reflects what the system will actually run.
+    @Published private(set) var savedSettings: Settings?
     @Published var lastError: String?
 
     private var manager: NETunnelProviderManager?
-    private var statusObserver: NSObjectProtocol?
-
-    init() {
-        Task { await reload() }
-    }
+    private var observers: [NSObjectProtocol] = []
 
     /// Connection parameters entered in the UI.
-    struct Settings {
+    struct Settings: Equatable {
         var serverNodeID: String
         var authToken: String
         var relayURLs: [String]
@@ -31,12 +39,35 @@ final class VPNController: ObservableObject {
         var routes6: [String]
     }
 
+    init() {
+        // Observe globally (object: nil) rather than per-connection: every
+        // preferences reload materializes a new connection object, which would
+        // silently orphan a per-object observer. Global + re-read keeps the UI
+        // honest even for status changes triggered from Settings > VPN.
+        observers.append(NotificationCenter.default.addObserver(
+            forName: .NEVPNStatusDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.syncStatus() }
+        })
+        // Configuration edited/removed outside the app (e.g. deleted in
+        // Settings): reload so `manager` doesn't go stale.
+        observers.append(NotificationCenter.default.addObserver(
+            forName: .NEVPNConfigurationChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in await self?.reload() }
+        })
+        Task { await reload() }
+    }
+
+    /// Re-read VPN preferences and re-sync status. Called on init, on
+    /// configuration changes, and when the app returns to the foreground
+    /// (notifications can be missed while suspended).
     func reload() async {
         do {
             let managers = try await NETunnelProviderManager.loadAllFromPreferences()
             manager = managers.first
-            observeStatus()
-            updateStatus()
+            savedSettings = manager.flatMap(Self.settings(from:))
+            syncStatus()
         } catch {
             lastError = "load failed: \(error.localizedDescription)"
         }
@@ -69,10 +100,10 @@ final class VPNController: ObservableObject {
             // Re-load so the saved config is fully materialized before starting.
             try await mgr.loadFromPreferences()
             manager = mgr
-            observeStatus()
+            savedSettings = s
 
             try mgr.connection.startVPNTunnel()
-            updateStatus()
+            syncStatus()
         } catch {
             lastError = "connect failed: \(error.localizedDescription)"
         }
@@ -80,31 +111,51 @@ final class VPNController: ObservableObject {
 
     func disconnect() {
         manager?.connection.stopVPNTunnel()
-        updateStatus()
+        syncStatus()
     }
 
-    private func observeStatus() {
-        if let statusObserver {
-            NotificationCenter.default.removeObserver(statusObserver)
+    /// Pull `status` from the system connection. Also surfaces the tunnel's own
+    /// failure reason when a session ends without the user asking it to.
+    private func syncStatus() {
+        guard let conn = manager?.connection else {
+            status = .invalid
+            connectedDate = nil
+            return
         }
-        guard let conn = manager?.connection else { return }
-        statusObserver = NotificationCenter.default.addObserver(
-            forName: .NEVPNStatusDidChange, object: conn, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.updateStatus() }
+        let previous = status
+        status = conn.status
+        connectedDate = conn.connectedDate
+
+        // A connect attempt (or live session) that lands back at .disconnected
+        // failed on the tunnel side; ask the system why.
+        let wasActive = previous == .connecting || previous == .connected || previous == .reasserting
+        if status == .disconnected, wasActive {
+            conn.fetchLastDisconnectError { [weak self] error in
+                guard let error else { return }
+                Task { @MainActor in
+                    self?.lastError = error.localizedDescription
+                }
+            }
         }
     }
 
-    private func updateStatus() {
-        guard let conn = manager?.connection else { status = "not installed"; return }
-        switch conn.status {
-        case .invalid: status = "invalid"
-        case .disconnected: status = "disconnected"
-        case .connecting: status = "connecting"
-        case .connected: status = "connected"
-        case .reasserting: status = "reasserting"
-        case .disconnecting: status = "disconnecting"
-        @unknown default: status = "unknown"
+    private static func settings(from manager: NETunnelProviderManager) -> Settings? {
+        guard
+            let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,
+            let conf = proto.providerConfiguration
+        else { return nil }
+        return Settings(
+            serverNodeID: conf["server_node_id"] as? String ?? "",
+            authToken: conf["auth_token"] as? String ?? "",
+            relayURLs: conf["relay_urls"] as? [String] ?? [],
+            routes: conf["routes"] as? [String] ?? [],
+            routes6: conf["routes6"] as? [String] ?? []
+        )
+    }
+
+    deinit {
+        for observer in observers {
+            NotificationCenter.default.removeObserver(observer)
         }
     }
 }
