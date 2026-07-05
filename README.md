@@ -1,8 +1,8 @@
 # ezvpn-ios (POC)
 
 A minimal iOS app + Packet Tunnel extension that runs the [`ezvpn`](../ezvpn)
-IP-over-QUIC tunnel on-device. **POC scope:** IPv4 **private split tunnel**
-only, real-device testing only, no App Store preparation.
+IP-over-QUIC tunnel on-device. **POC scope:** dual-stack **split tunnel**,
+real-device testing only, no App Store preparation.
 
 It links `libezvpn.a` (the Rust core, built from the sibling `../ezvpn` repo)
 into a `NEPacketTunnelProvider`. The Rust side does the iroh connect + handshake
@@ -10,11 +10,16 @@ into a `NEPacketTunnelProvider`. The Rust side does the iroh connect + handshake
 
 ## What this POC does and does not do
 
-- ✅ IPv4 split tunnel to private CIDRs (e.g. `10.0.0.0/8`).
+- ✅ IPv4/IPv6 split tunnel. The tunnel's own subnet (from the server-assigned
+  address + mask) is always routed automatically; extra CIDRs are optional.
 - ✅ Connects to an `ezvpn` server over iroh (direct or relay), handshakes,
   tunnels IP over QUIC datagrams.
-- ❌ No IPv6, no full tunnel, no underlay-bypass routing (a private split tunnel
-  never captures the iroh underlay, so it isn't needed).
+- ✅ Underlay-bypass routing, like the desktop client's bootstrap bypass: at
+  connect, the core computes every relay IP plus the server's candidate
+  underlay addresses, and any of them a routed prefix would capture is excluded
+  from the tunnel (`excludedRoutes`), so the transport never self-captures.
+  Static (handshake-time) only — the server's mid-session address publications
+  are not re-applied.
 - ❌ No App Store / TestFlight setup. No simulator (a Packet Tunnel Provider
   only runs on a real device).
   
