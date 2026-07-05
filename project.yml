@@ -15,10 +15,18 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
 
+# Per-developer signing lives in Developer.xcconfig (which #include?s the
+# gitignored Developer.local.xcconfig). Copy Developer.local.xcconfig.sample to
+# Developer.local.xcconfig and set DEVELOPMENT_TEAM so Xcode/xcodebuild builds
+# sign automatically — same pattern as ../flextunnel-ios.
+configFiles:
+  Debug: Developer.xcconfig
+  Release: Developer.xcconfig
+
 settings:
   base:
-    # ---- SET THIS to your Apple Developer Team ID, or set it in Xcode. ----
-    DEVELOPMENT_TEAM: ""
+    # DEVELOPMENT_TEAM comes from Developer.xcconfig (see configFiles above).
+    # Not set here: a build setting would override the xcconfig value.
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1,2"

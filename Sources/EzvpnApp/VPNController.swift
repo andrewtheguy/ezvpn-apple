@@ -23,7 +23,6 @@ final class VPNController: ObservableObject {
     /// Connection parameters entered in the UI.
     struct Settings {
         var serverNodeID: String
-        var alpnToken: String
         var authToken: String
         var relayURLs: [String]
         /// IPv4 private CIDRs to route through the tunnel (split tunnel).
@@ -56,7 +55,6 @@ final class VPNController: ObservableObject {
             // Everything the extension needs is plist-serializable here.
             proto.providerConfiguration = [
                 "server_node_id": s.serverNodeID,
-                "alpn_token": s.alpnToken,
                 "auth_token": s.authToken,
                 "relay_urls": s.relayURLs,
                 "routes": s.routes,

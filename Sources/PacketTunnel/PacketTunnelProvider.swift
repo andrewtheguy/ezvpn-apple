@@ -26,7 +26,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         let serverNodeID = conf["server_node_id"] as? String ?? ""
-        let alpnToken = conf["alpn_token"] as? String ?? ""
         let authToken = conf["auth_token"] as? String
         let relayURLs = conf["relay_urls"] as? [String] ?? []
         let routes = conf["routes"] as? [String] ?? []
@@ -36,7 +35,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // compute which server underlay addresses overlap and must be excluded.
         let configDict: [String: Any] = [
             "server_node_id": serverNodeID,
-            "alpn_token": alpnToken,
             "auth_token": (authToken?.isEmpty == false) ? authToken! : NSNull(),
             "relay_urls": relayURLs,
             "relay_only": false,
