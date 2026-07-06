@@ -23,6 +23,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// WireGuard app uses. Accessed on `workQueue` only.
     private var runtimeConfig: [String: Any]?
 
+    /// Set when `stopTunnel` runs while `ezvpn_connect` is still in flight
+    /// (there is no handle to stop yet). The connect path checks it once the
+    /// handshake returns and tears down instead of proceeding. Accessed on
+    /// `workQueue` only.
+    private var stopRequested = false
+
     override func startTunnel(
         options: [String: NSObject]?,
         completionHandler: @escaping (Error?) -> Void
@@ -61,6 +67,25 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        // ezvpn_connect blocks until connect + handshake succeed, fail, or time
+        // out (bounded by connect_timeout_secs in the Rust core). Run it off the
+        // provider's calling queue: blocking that queue would also block delivery
+        // of stopTunnel, so cancelling a connect to an offline server would hang
+        // at "disconnecting" until the OS kills the process.
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.connectAndStart(configStr: configStr, routes: routes, routes6: routes6,
+                                 completionHandler: completionHandler)
+        }
+    }
+
+    /// The blocking half of `startTunnel`: connect + handshake via the Rust
+    /// core, then apply tunnel settings. Runs on a background queue.
+    private func connectAndStart(
+        configStr: String,
+        routes: [String],
+        routes6: [String],
+        completionHandler: @escaping (Error?) -> Void
+    ) {
         // ezvpn_connect: connect + handshake. Result/error JSON lands in `buf`.
         var buf = [CChar](repeating: 0, count: 4096)
         let handle = configStr.withCString { cstr in
@@ -73,12 +98,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             completionHandler(Self.error("connect failed: \(resultStr)"))
             return
         }
-        // `handle` is stored into `self.handle` only once all synchronous
-        // validation below has passed (just before setTunnelNetworkSettings), so
-        // these pre-flight error paths only need to stop the local handle. All
-        // access to `self.handle` is confined to `workQueue`, mirroring
-        // `runtimeConfig`, so stopTunnel and the async completion below can never
-        // race into a double `ezvpn_stop` (which would double-free the handle).
+        // `handle` is stored into `self.handle` only once all validation below
+        // has passed (just before setTunnelNetworkSettings), so these pre-flight
+        // error paths only need to stop the local handle. All access to
+        // `self.handle` is confined to `workQueue`, mirroring `runtimeConfig`,
+        // so stopTunnel and the async completion below can never race into a
+        // double `ezvpn_stop` (which would double-free the handle). A stop that
+        // arrived while the connect was in flight is caught via `stopRequested`
+        // on `workQueue` below.
         os_log("handshake result: %{public}@", log: log, type: .info, resultStr)
 
         guard
@@ -159,10 +186,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         // Publish the handle so stopTunnel can find it, then keep every further
-        // touch of it on workQueue. Enqueued before the completion's own
-        // workQueue block, so the serial queue guarantees the store lands first.
-        workQueue.async { self.handle = handle }
+        // touch of it on workQueue. If stopTunnel already ran while the connect
+        // was in flight, it has completed with nothing to stop — tear down the
+        // fresh handle here instead of proceeding with a dead session.
+        workQueue.async {
+            if self.stopRequested {
+                ezvpn_stop(handle)
+                completionHandler(Self.error("tunnel stopped during connect"))
+                return
+            }
+            self.handle = handle
+            self.applySettingsAndRun(settings, runtime: runtime,
+                                     completionHandler: completionHandler)
+        }
+    }
 
+    /// Apply the tunnel network settings and hand the utun fd to the Rust data
+    /// loop. Called on `workQueue` with `self.handle` already published.
+    private func applySettingsAndRun(
+        _ settings: NEPacketTunnelNetworkSettings,
+        runtime: [String: Any],
+        completionHandler: @escaping (Error?) -> Void
+    ) {
         setTunnelNetworkSettings(settings) { [weak self] error in
             guard let self else { return }
             self.workQueue.async {
@@ -214,6 +259,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // OS removes the utun and its routes only after the data plane is
         // actually dead — not while the Rust side may still be writing.
         workQueue.async { [self] in
+            // No handle yet means ezvpn_connect is still in flight on its
+            // background queue; complete now and let the connect path tear its
+            // handle down when it returns (see connectAndStart).
+            stopRequested = true
             if let handle {
                 ezvpn_stop(handle)
                 self.handle = nil
