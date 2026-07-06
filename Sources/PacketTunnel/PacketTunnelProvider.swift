@@ -113,11 +113,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // are carved back out via excludedRoutes; everything else stays off.
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: remoteAddr)
 
-        // User route lists are optional: the tunnel's own subnet (derived from the
-        // assigned address + mask) is always routed, so the server side of the
-        // tunnel (e.g. 10.124.0.1) is reachable with no configuration. Extra
-        // routes widen the split tunnel. Routes for a family the server did not
-        // assign can't be applied — warn so it isn't silently ignored.
+        // User route lists are optional: the server advertises a host mask
+        // (/32, /128), so the assigned address is on-link to itself only and the
+        // gateway is routed explicitly as a host route (see ipv4/ipv6
+        // InterfaceRoutes). That keeps the server side of the tunnel (e.g.
+        // 10.124.0.1) reachable with no configuration. Extra routes widen the
+        // split tunnel. Routes for a family the server did not assign can't be
+        // applied — warn so it isn't silently ignored.
         if let v4ip, let v4mask {
             let ipv4 = NEIPv4Settings(addresses: [v4ip], subnetMasks: [v4mask])
             ipv4.includedRoutes = Self.ipv4InterfaceRoutes(ip: v4ip, mask: v4mask, gateway: v4gw)
@@ -254,9 +256,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     /// Routes implied by the interface assignment itself: the on-link subnet of
-    /// the assigned address (so the server end of the tunnel is reachable with
-    /// no user-configured routes), plus a host route to the gateway for the
-    /// point-to-point case where the gateway sits outside that subnet.
+    /// the assigned address, plus a host route to the gateway when it sits
+    /// outside that subnet. The server advertises a host mask (/32, /128), so
+    /// the "subnet" is just the assigned address and the gateway host route is
+    /// what actually makes the server end of the tunnel reachable with no
+    /// user-configured routes.
     private static func ipv4InterfaceRoutes(
         ip: String, mask: String, gateway: String?
     ) -> [NEIPv4Route] {
