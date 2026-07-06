@@ -22,7 +22,7 @@ import PackageDescription
 // paths outside the package root). Build it with `./build-ios.sh release`.
 
 // Managed by scripts/use-{local,release}-xcframework.sh — do not edit by hand.
-let useLocalXcframework = true
+let useLocalXcframework = false
 
 let binaryTarget: Target = useLocalXcframework
     ? .binaryTarget(name: "libezvpn", path: "local/libezvpn.xcframework")
