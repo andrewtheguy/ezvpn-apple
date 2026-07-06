@@ -73,7 +73,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             completionHandler(Self.error("connect failed: \(resultStr)"))
             return
         }
-        self.handle = handle
+        // `handle` is stored into `self.handle` only once all synchronous
+        // validation below has passed (just before setTunnelNetworkSettings), so
+        // these pre-flight error paths only need to stop the local handle. All
+        // access to `self.handle` is confined to `workQueue`, mirroring
+        // `runtimeConfig`, so stopTunnel and the async completion below can never
+        // race into a double `ezvpn_stop` (which would double-free the handle).
         os_log("handshake result: %{public}@", log: log, type: .info, resultStr)
 
         guard
@@ -82,7 +87,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let mtu = obj["mtu"] as? Int
         else {
             ezvpn_stop(handle)
-            self.handle = nil
             completionHandler(Self.error("bad network config: \(resultStr)"))
             return
         }
@@ -100,7 +104,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // Tunnel needs a remote-address label; any assigned gateway works.
         guard let remoteAddr = v4gw ?? v6gw else {
             ezvpn_stop(handle)
-            self.handle = nil
             completionHandler(Self.error("no gateway in network config: \(resultStr)"))
             return
         }
@@ -153,34 +156,49 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             runtime["bypass_routes6"] = (ipv6.excludedRoutes ?? []).map(Self.cidrString)
         }
 
+        // Publish the handle so stopTunnel can find it, then keep every further
+        // touch of it on workQueue. Enqueued before the completion's own
+        // workQueue block, so the serial queue guarantees the store lands first.
+        workQueue.async { self.handle = handle }
+
         setTunnelNetworkSettings(settings) { [weak self] error in
             guard let self else { return }
-            if let error {
-                os_log("setTunnelNetworkSettings failed: %{public}@",
-                       log: self.log, type: .error, error.localizedDescription)
-                ezvpn_stop(handle)
-                self.handle = nil
-                completionHandler(error)
-                return
-            }
+            self.workQueue.async {
+                // A concurrent stopTunnel may have already stopped and cleared
+                // the handle while these settings were being applied. Re-read it
+                // on workQueue and bail if it's gone, so we never run or stop a
+                // freed handle.
+                guard let handle = self.handle else {
+                    completionHandler(Self.error("tunnel stopped during setup"))
+                    return
+                }
+                if let error {
+                    os_log("setTunnelNetworkSettings failed: %{public}@",
+                           log: self.log, type: .error, error.localizedDescription)
+                    ezvpn_stop(handle)
+                    self.handle = nil
+                    completionHandler(error)
+                    return
+                }
 
-            guard let fd = self.tunnelFileDescriptor else {
-                ezvpn_stop(handle)
-                self.handle = nil
-                completionHandler(Self.error("could not locate utun fd"))
-                return
-            }
+                guard let fd = self.tunnelFileDescriptor else {
+                    ezvpn_stop(handle)
+                    self.handle = nil
+                    completionHandler(Self.error("could not locate utun fd"))
+                    return
+                }
 
-            let rc = ezvpn_run(handle, fd)
-            if rc != 0 {
-                ezvpn_stop(handle)
-                self.handle = nil
-                completionHandler(Self.error("ezvpn_run failed (rc=\(rc))"))
-                return
+                let rc = ezvpn_run(handle, fd)
+                if rc != 0 {
+                    ezvpn_stop(handle)
+                    self.handle = nil
+                    completionHandler(Self.error("ezvpn_run failed (rc=\(rc))"))
+                    return
+                }
+                os_log("tunnel running on fd %d", log: self.log, type: .info, fd)
+                self.runtimeConfig = runtime
+                completionHandler(nil)
             }
-            os_log("tunnel running on fd %d", log: self.log, type: .info, fd)
-            self.workQueue.async { self.runtimeConfig = runtime }
-            completionHandler(nil)
         }
     }
 

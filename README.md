@@ -72,7 +72,7 @@ into a `NEPacketTunnelProvider`. The Rust side does the iroh connect + handshake
 
 5. **Enter the server details** in the app and tap Connect:
    - *Server node id* — the `ezvpn` server's iroh endpoint id.
-   - *Auth token* — optional, if the server requires one.
+   - *Auth token* — required; the token the server authenticates you with.
    - *Relay URLs* — optional hints; leave blank to use iroh defaults.
    - *Routes* — the private CIDRs to tunnel (defaults to RFC1918).
 
