@@ -1,4 +1,5 @@
 import NetworkExtension
+import Network
 import Darwin
 import os.log
 
@@ -28,6 +29,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// handshake returns and tears down instead of proceeding. Accessed on
     /// `workQueue` only.
     private var stopRequested = false
+
+    /// Watches the physical network while the tunnel runs (same shape as
+    /// WireGuardAdapter's monitor, but simpler policy): any change to the
+    /// underlay — Wi-Fi ↔ cellular, different Wi-Fi, network lost — cancels the
+    /// tunnel instead of trying to migrate the QUIC session across it. The user
+    /// reconnects on the new network. Accessed on `workQueue` only.
+    private var networkMonitor: NWPathMonitor?
+    /// Fingerprint of the physical path at tunnel start, captured from the
+    /// monitor's initial callback; a later mismatch is a network change.
+    private var networkPathKey: String?
 
     override func startTunnel(
         options: [String: NSObject]?,
@@ -244,9 +255,57 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 }
                 os_log("tunnel running on fd %d", log: self.log, type: .info, fd)
                 self.runtimeConfig = runtime
+                self.startNetworkMonitor()
                 completionHandler(nil)
             }
         }
+    }
+
+    /// Begin watching the physical network. Called on `workQueue` once the
+    /// data loop is running; the monitor delivers its callbacks on `workQueue`
+    /// too, so all state stays queue-confined.
+    private func startNetworkMonitor() {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            self?.handlePathUpdate(path)
+        }
+        monitor.start(queue: workQueue)
+        networkMonitor = monitor
+    }
+
+    /// Disconnect on any change to the physical network (runs on `workQueue`).
+    /// The monitor fires once immediately on start — that callback records the
+    /// baseline; any later mismatch cancels the tunnel via the OS, which calls
+    /// `stopTunnel` for the actual teardown and surfaces the reason to the app
+    /// through `fetchLastDisconnectError`.
+    private func handlePathUpdate(_ path: Network.NWPath) {
+        guard handle != nil else { return }
+        let key = Self.pathKey(path)
+        guard let baseline = networkPathKey else {
+            networkPathKey = key
+            os_log("network baseline: %{public}@", log: log, type: .info, key)
+            return
+        }
+        guard key != baseline else { return }
+        os_log("network changed (%{public}@ -> %{public}@), disconnecting",
+               log: log, type: .info, baseline, key)
+        // Stop watching before cancelling: teardown itself perturbs the path,
+        // and one cancel is enough.
+        networkMonitor?.cancel()
+        networkMonitor = nil
+        cancelTunnelWithError(Self.error("network changed, disconnected"))
+    }
+
+    /// Fingerprint of the physical network the tunnel is riding on: overall
+    /// reachability plus the usable non-virtual interfaces. Virtual interfaces
+    /// are ignored — our own utun shows up in the path and must not trigger a
+    /// self-inflicted disconnect.
+    private static func pathKey(_ path: Network.NWPath) -> String {
+        let physical: [NWInterface.InterfaceType] = [.wifi, .cellular, .wiredEthernet]
+        let interfaces = path.availableInterfaces
+            .filter { physical.contains($0.type) }
+            .map { "\($0.name)(\($0.type))" }
+        return "\(path.status):\(interfaces.joined(separator: ","))"
     }
 
     override func stopTunnel(
@@ -263,6 +322,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // background queue; complete now and let the connect path tear its
             // handle down when it returns (see connectAndStart).
             stopRequested = true
+            networkMonitor?.cancel()
+            networkMonitor = nil
+            networkPathKey = nil
             if let handle {
                 ezvpn_stop(handle)
                 self.handle = nil

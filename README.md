@@ -23,6 +23,9 @@ The Rust side does the iroh connect + handshake + datagram loop; iOS owns the
   are not re-applied.
 - ✅ Simple manual connect/disconnect. Tunnel teardown follows wireguard-apple:
   `stopTunnel` completes only after the Rust data plane has actually stopped.
+- ✅ Disconnect on network change: any change to the physical network (Wi-Fi ↔
+  cellular, different Wi-Fi, network lost) cancels the tunnel rather than trying
+  to migrate the QUIC session across it — reconnect manually on the new network.
 - ✅ Debug: while connected, the app shows the *applied* interface state —
   assigned addresses, tunnel routes, and the active bypass (excluded) routes —
   queried live from the tunnel process over the WireGuard-style
