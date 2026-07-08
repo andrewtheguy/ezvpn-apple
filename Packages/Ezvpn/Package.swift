@@ -28,8 +28,8 @@ let binaryTarget: Target = useLocalXcframework
     ? .binaryTarget(name: "libezvpn", path: "local/libezvpn.xcframework")
     : .binaryTarget(
         name: "libezvpn",
-        url: "https://github.com/andrewtheguy/ezvpn/releases/download/v0.0.15-alpha2/libezvpn-ios.xcframework.zip",
-        checksum: "ed167583bd690c8c773eba4abf6ec09c2dd8a4fac937d4da6c529e4012138ff2"
+        url: "https://github.com/andrewtheguy/ezvpn/releases/download/v0.0.16/libezvpn-ios.xcframework.zip",
+        checksum: "36436b73a4b52b227df93943802d8096d6daa9808ce7b875c11fbd879e5e5db4"
     )
 
 let package = Package(
