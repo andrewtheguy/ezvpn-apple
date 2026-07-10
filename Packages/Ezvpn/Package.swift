@@ -1,4 +1,5 @@
 // swift-tools-version:5.9
+import Foundation
 import PackageDescription
 
 // Delivers the iOS Rust artifact — libezvpn.xcframework (built by the sibling
@@ -6,31 +7,28 @@ import PackageDescription
 // package binary target. The app (this repo) references this package by local
 // path, so it always uses this manifest; there is no vendored copy.
 //
-// The binary target has two modes, toggled by the `useLocalXcframework` line
-// below. That line is managed by scripts — flip it with:
+// Default: download the pinned release zip by URL + checksum (reproducible).
+// Bump both when moving to a new release (scripts/bump-xcframework.sh <tag>).
 //
-//   scripts/use-local-xcframework.sh          # local dev build (sibling ../ezvpn)
-//   scripts/use-release-xcframework.sh [tag]  # pinned release zip (url+checksum)
-//
-// The mode lives in this file rather than an environment variable so that
-// xcodegen, xcodebuild, and the Xcode GUI can never disagree about which
-// artifact is linked, and `git diff` shows the current mode at a glance.
-// Release mode (reproducible url+checksum) is the committed default.
-//
-// Local mode links the sibling's build via the committed relative symlink
-// local/libezvpn.xcframework -> ../ezvpn/dist/ios/… (SPM forbids binary-target
-// paths outside the package root). Build it with `./build-ios.sh release`.
+// Local FFI dev: set EZVPN_LOCAL_XCFRAMEWORK to link a locally built xcframework
+// instead of the release. SPM forbids binary-target paths outside the package
+// root, so the local build is reached through the committed relative symlink
+// local/libezvpn.xcframework -> ../ezvpn/dist/ios. Set the var to "1" to use
+// that symlink, or to another path relative to this package dir:
+//   EZVPN_LOCAL_XCFRAMEWORK=1 xcodegen generate && ... xcodebuild ...
 
-// Managed by scripts/use-{local,release}-xcframework.sh — do not edit by hand.
-let useLocalXcframework = false
+func localBinaryTarget() -> Target? {
+    guard let value = ProcessInfo.processInfo.environment["EZVPN_LOCAL_XCFRAMEWORK"],
+          !value.isEmpty else { return nil }
+    let path = (value == "1" || value == "true") ? "local/libezvpn.xcframework" : value
+    return .binaryTarget(name: "libezvpn", path: path)
+}
 
-let binaryTarget: Target = useLocalXcframework
-    ? .binaryTarget(name: "libezvpn", path: "local/libezvpn.xcframework")
-    : .binaryTarget(
-        name: "libezvpn",
-        url: "https://github.com/andrewtheguy/ezvpn/releases/download/v0.0.16/libezvpn-ios.xcframework.zip",
-        checksum: "36436b73a4b52b227df93943802d8096d6daa9808ce7b875c11fbd879e5e5db4"
-    )
+let binaryTarget = localBinaryTarget() ?? .binaryTarget(
+    name: "libezvpn",
+    url: "https://github.com/andrewtheguy/ezvpn/releases/download/v0.0.16/libezvpn-ios.xcframework.zip",
+    checksum: "36436b73a4b52b227df93943802d8096d6daa9808ce7b875c11fbd879e5e5db4"
+)
 
 let package = Package(
     name: "Ezvpn",
