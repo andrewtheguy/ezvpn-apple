@@ -16,7 +16,10 @@ struct EzvpnApp: App {
         }
         .defaultSize(width: 480, height: 600)
 
-        MenuBarExtra("ezvpn", systemImage: "network") {
+        MenuBarExtra(
+            "ezvpn",
+            image: "MenuBarIcon"
+        ) {
             MenuBarView()
                 .environmentObject(manager)
         }
