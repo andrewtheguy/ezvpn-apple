@@ -29,9 +29,15 @@ Options:
   -m, --method METHOD         Export method. Defaults to debugging.
   -h, --help                  Show this help.
 
-Builds always run with -allowProvisioningUpdates so Xcode can create or update
-the Developer ID profiles the Packet Tunnel network-extension entitlement needs
-(mirrors scripts/run-macos.sh).
+Both build steps (archive and export) run with -allowProvisioningUpdates so
+Xcode can create or update the development signing profiles the Packet Tunnel
+network-extension entitlement needs (mirrors scripts/run-macos.sh). That path
+is NOT offline or non-mutating: it requires an Apple Developer account signed
+in to Xcode and network access to Apple, and it may create or modify signing
+assets on the developer portal. Where credentials or network are unavailable
+(e.g. locked-down CI), pre-install the required profiles/certificates and drop
+the two -allowProvisioningUpdates flags below, or feed in a pre-signed archive;
+the default leaves them on.
 
 Environment overrides:
   TEAM_ID, ARCHIVE_PATH, CONFIGURATION, EXPORT_PATH, METHOD
