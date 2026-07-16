@@ -23,6 +23,27 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(NEVPNStatus.disconnecting.displayText, "Disconnecting…")
     }
 
+    func testMenuBarIconStateTracksEstablishedVPN() {
+        XCTAssertEqual(MenuBarIconState.resolve(statuses: []), .disconnected)
+        XCTAssertEqual(
+            MenuBarIconState.resolve(statuses: [.invalid, .disconnected, .connecting]),
+            .disconnected
+        )
+        XCTAssertEqual(MenuBarIconState.resolve(statuses: [.connected]), .connected)
+        XCTAssertEqual(MenuBarIconState.resolve(statuses: [.reasserting]), .connected)
+        XCTAssertEqual(
+            MenuBarIconState.resolve(statuses: [.disconnected, .connected]),
+            .connected
+        )
+    }
+
+    func testMenuBarIconStateProvidesAssetAndAccessibilityLabels() {
+        XCTAssertEqual(MenuBarIconState.disconnected.imageName, "MenuBarIcon")
+        XCTAssertEqual(MenuBarIconState.disconnected.accessibilityLabel, "ezvpn, disconnected")
+        XCTAssertEqual(MenuBarIconState.connected.imageName, "MenuBarConnectedIcon")
+        XCTAssertEqual(MenuBarIconState.connected.accessibilityLabel, "ezvpn, connected")
+    }
+
     func testManagerErrorsHaveUserFacingDescriptions() {
         XCTAssertEqual(TunnelsManagerError.nameEmpty.errorDescription, "Name can't be empty.")
         XCTAssertEqual(
