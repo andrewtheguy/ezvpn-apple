@@ -169,10 +169,10 @@ shapes.
 ## Logs
 
 The extension logs to the unified log (subsystem
-`com.example.ezvpn.PacketTunnel`). Watch with:
+`com.andrewtheguy.ezvpn.PacketTunnel`). Watch with:
 
 ```sh
-log stream --predicate 'subsystem == "com.example.ezvpn.PacketTunnel"' --level debug
+log stream --predicate 'subsystem == "com.andrewtheguy.ezvpn.PacketTunnel"' --level debug
 ```
 
 Rust-side logs go to stderr (honors `RUST_LOG`, default `info`) and are captured

@@ -29,7 +29,7 @@ final class TunnelsManager: ObservableObject {
     @Published var lastError: String?
 
     /// Bundle id of the Packet Tunnel extension (must match project.yml).
-    private let providerBundleID = "com.example.ezvpn.PacketTunnel"
+    private let providerBundleID = "com.andrewtheguy.ezvpn.PacketTunnel"
 
     private var statusObserver: NSObjectProtocol?
     private var configObserver: NSObjectProtocol?
