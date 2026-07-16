@@ -1,6 +1,34 @@
 import Foundation
 import Security
 
+struct AuthTokenKeychainClient {
+    typealias Result = (status: OSStatus, value: Any?)
+
+    let add: ([String: Any]) -> Result
+    let update: ([String: Any], [String: Any]) -> OSStatus
+    let copyMatching: ([String: Any]) -> Result
+    let delete: ([String: Any]) -> OSStatus
+
+    static let security = AuthTokenKeychainClient(
+        add: { query in
+            var result: CFTypeRef?
+            let status = SecItemAdd(query as CFDictionary, &result)
+            return (status, result)
+        },
+        update: { query, attributes in
+            SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        },
+        copyMatching: { query in
+            var result: CFTypeRef?
+            let status = SecItemCopyMatching(query as CFDictionary, &result)
+            return (status, result)
+        },
+        delete: { query in
+            SecItemDelete(query as CFDictionary)
+        }
+    )
+}
+
 /// Shared Keychain storage for profile authentication tokens.
 ///
 /// The containing app creates and updates the item; the packet-tunnel
@@ -11,7 +39,11 @@ enum AuthTokenKeychain {
     static let service = "ezvpn.auth-token"
     static let accessGroupInfoKey = "EZVPNKeychainAccessGroup"
 
-    static func store(_ token: String, for profileID: UUID) throws -> Data {
+    static func store(
+        _ token: String,
+        for profileID: UUID,
+        client: AuthTokenKeychainClient = .security
+    ) throws -> Data {
         guard !token.isEmpty, let tokenData = token.data(using: .utf8) else {
             throw AuthTokenKeychainError.invalidToken
         }
@@ -22,8 +54,7 @@ enum AuthTokenKeychain {
             kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         addQuery[kSecReturnPersistentRef as String] = true
 
-        var result: CFTypeRef?
-        let addStatus = SecItemAdd(addQuery as CFDictionary, &result)
+        let (addStatus, result) = client.add(addQuery)
         switch addStatus {
         case errSecSuccess:
             guard let reference = result as? Data else {
@@ -36,22 +67,23 @@ enum AuthTokenKeychain {
                 kSecAttrAccessible as String:
                     kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             ]
-            let updateStatus = SecItemUpdate(
-                try identityQuery(for: profileID) as CFDictionary,
-                attributes as CFDictionary
-            )
+            let updateStatus = client.update(
+                try identityQuery(for: profileID), attributes)
             guard updateStatus == errSecSuccess else {
                 throw AuthTokenKeychainError.security(
                     operation: "update auth token", status: updateStatus)
             }
-            return try persistentReference(for: profileID)
+            return try persistentReference(for: profileID, client: client)
         default:
             throw AuthTokenKeychainError.security(
                 operation: "store auth token", status: addStatus)
         }
     }
 
-    static func token(for persistentReference: Data) throws -> String {
+    static func token(
+        for persistentReference: Data,
+        client: AuthTokenKeychainClient = .security
+    ) throws -> String {
         let query: [String: Any]
         #if os(macOS)
         // macOS resolves persistent references through kSecMatchItemList and
@@ -76,8 +108,7 @@ enum AuthTokenKeychain {
             kSecReturnData as String: true,
         ]
         #endif
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let (status, result) = client.copyMatching(query)
         guard status == errSecSuccess else {
             throw AuthTokenKeychainError.security(
                 operation: "load auth token", status: status)
@@ -92,21 +123,26 @@ enum AuthTokenKeychain {
         return token
     }
 
-    static func delete(for profileID: UUID) throws {
-        let status = SecItemDelete(try identityQuery(for: profileID) as CFDictionary)
+    static func delete(
+        for profileID: UUID,
+        client: AuthTokenKeychainClient = .security
+    ) throws {
+        let status = client.delete(try identityQuery(for: profileID))
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw AuthTokenKeychainError.security(
                 operation: "delete auth token", status: status)
         }
     }
 
-    private static func persistentReference(for profileID: UUID) throws -> Data {
+    private static func persistentReference(
+        for profileID: UUID,
+        client: AuthTokenKeychainClient
+    ) throws -> Data {
         var query = try identityQuery(for: profileID)
         query[kSecReturnPersistentRef as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let (status, result) = client.copyMatching(query)
         guard status == errSecSuccess else {
             throw AuthTokenKeychainError.security(
                 operation: "load auth token reference", status: status)

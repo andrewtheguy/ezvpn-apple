@@ -108,22 +108,28 @@ final class AppModelTests: XCTestCase {
 
     func testAuthTokenKeychainRoundTripAndUpdate() throws {
         let id = UUID()
-        defer { try? AuthTokenKeychain.delete(for: id) }
+        let storage = InMemoryAuthTokenKeychain()
+        let client = storage.client
+        defer { try? AuthTokenKeychain.delete(for: id, client: client) }
 
-        let firstReference = try AuthTokenKeychain.store("first-token", for: id)
+        let firstReference = try AuthTokenKeychain.store(
+            "first-token", for: id, client: client)
         XCTAssertEqual(
-            try AuthTokenKeychain.token(for: firstReference),
+            try AuthTokenKeychain.token(for: firstReference, client: client),
             "first-token"
         )
 
-        let updatedReference = try AuthTokenKeychain.store("updated-token", for: id)
+        let updatedReference = try AuthTokenKeychain.store(
+            "updated-token", for: id, client: client)
+        XCTAssertEqual(updatedReference, firstReference)
         XCTAssertEqual(
-            try AuthTokenKeychain.token(for: updatedReference),
+            try AuthTokenKeychain.token(for: updatedReference, client: client),
             "updated-token"
         )
 
-        try AuthTokenKeychain.delete(for: id)
-        XCTAssertThrowsError(try AuthTokenKeychain.token(for: updatedReference))
+        try AuthTokenKeychain.delete(for: id, client: client)
+        XCTAssertThrowsError(
+            try AuthTokenKeychain.token(for: updatedReference, client: client))
     }
 
     func testAttachReplacesManagerButPreservesFallbackName() throws {
@@ -154,5 +160,97 @@ final class AppModelTests: XCTestCase {
         manager.localizedDescription = name
         manager.protocolConfiguration = proto
         return manager
+    }
+}
+
+private final class InMemoryAuthTokenKeychain {
+    private struct Item {
+        var tokenData: Data
+        let persistentReference: Data
+    }
+
+    private var items: [String: Item] = [:]
+
+    var client: AuthTokenKeychainClient {
+        AuthTokenKeychainClient(
+            add: { [unowned self] query in add(query) },
+            update: { [unowned self] query, attributes in
+                update(query, attributes: attributes)
+            },
+            copyMatching: { [unowned self] query in copyMatching(query) },
+            delete: { [unowned self] query in delete(query) }
+        )
+    }
+
+    private func add(_ query: [String: Any]) -> AuthTokenKeychainClient.Result {
+        guard
+            let account = query[kSecAttrAccount as String] as? String,
+            let tokenData = query[kSecValueData as String] as? Data
+        else {
+            return (errSecParam, nil)
+        }
+        guard items[account] == nil else {
+            return (errSecDuplicateItem, nil)
+        }
+
+        let reference = Data("persistent-ref:\(account)".utf8)
+        items[account] = Item(
+            tokenData: tokenData,
+            persistentReference: reference
+        )
+        return (errSecSuccess, reference)
+    }
+
+    private func update(
+        _ query: [String: Any],
+        attributes: [String: Any]
+    ) -> OSStatus {
+        guard
+            let account = query[kSecAttrAccount as String] as? String,
+            let tokenData = attributes[kSecValueData as String] as? Data,
+            var item = items[account]
+        else {
+            return errSecItemNotFound
+        }
+
+        item.tokenData = tokenData
+        items[account] = item
+        return errSecSuccess
+    }
+
+    private func copyMatching(
+        _ query: [String: Any]
+    ) -> AuthTokenKeychainClient.Result {
+        if query[kSecReturnPersistentRef as String] as? Bool == true {
+            guard
+                let account = query[kSecAttrAccount as String] as? String,
+                let item = items[account]
+            else {
+                return (errSecItemNotFound, nil)
+            }
+            return (errSecSuccess, item.persistentReference)
+        }
+
+        let reference =
+            query[kSecValuePersistentRef as String] as? Data
+            ?? (query[kSecMatchItemList as String] as? [Data])?.first
+        guard
+            let reference,
+            let item = items.values.first(where: {
+                $0.persistentReference == reference
+            })
+        else {
+            return (errSecItemNotFound, nil)
+        }
+        return (errSecSuccess, item.tokenData)
+    }
+
+    private func delete(_ query: [String: Any]) -> OSStatus {
+        guard let account = query[kSecAttrAccount as String] as? String else {
+            return errSecParam
+        }
+        return items.removeValue(forKey: account) == nil
+            ? errSecItemNotFound
+            : errSecSuccess
     }
 }
