@@ -1,0 +1,118 @@
+name: Release (Manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.tag.outputs.release_tag }}
+      release_title: ${{ steps.tag.outputs.release_title }}
+      is_prerelease: ${{ steps.tag.outputs.is_prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Generate tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t versions < <(
+            sed -nE \
+              's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"([0-9]+(\.[0-9]+){1,2})".*/\1/p' \
+              project.yml
+          )
+
+          if [ "${#versions[@]}" -ne 2 ]; then
+            echo "::error::Expected exactly two MARKETING_VERSION values in project.yml"
+            exit 1
+          fi
+          if [ "${versions[0]}" != "${versions[1]}" ]; then
+            echo "::error::App and extension MARKETING_VERSION values do not match"
+            exit 1
+          fi
+
+          version="${versions[0]}"
+          echo "release_tag=v$version" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "release_title=Prerelease v$version" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_title=Release v$version" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Abort if tag already exists
+        run: |
+          if git ls-remote --tags origin "refs/tags/${{ steps.tag.outputs.release_tag }}" | grep -q .; then
+            echo "::error::Tag ${{ steps.tag.outputs.release_tag }} already exists on remote"
+            exit 1
+          fi
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "${{ steps.tag.outputs.release_tag }}" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx true; then
+            echo "Deleting stale draft release ${{ steps.tag.outputs.release_tag }}"
+            gh release delete "${{ steps.tag.outputs.release_tag }}" --yes
+          fi
+
+          args=()
+          if [ "${{ steps.tag.outputs.is_prerelease }}" = "true" ]; then
+            args+=(--prerelease)
+          else
+            prev_stable=$(gh release list \
+              --exclude-pre-releases \
+              --exclude-drafts \
+              --limit 1 \
+              --json tagName \
+              --jq '.[0].tagName // empty')
+            if [ -n "$prev_stable" ]; then
+              args+=(--notes-start-tag "$prev_stable")
+            fi
+          fi
+
+          gh release create "${{ steps.tag.outputs.release_tag }}" \
+            --draft \
+            --target "${{ github.sha }}" \
+            --title "${{ steps.tag.outputs.release_title }}" \
+            --generate-notes \
+            "${args[@]}"
+
+  build-apple:
+    needs: setup
+    uses: ./.github/workflows/build-unsigned.yml
+
+  publish-release:
+    needs: [setup, build-apple]
+    if: always() && needs.setup.result == 'success' && needs.build-apple.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: List release artifacts
+        run: ls -la artifacts/
+
+      - name: Upload artifacts to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "${{ needs.setup.outputs.release_tag }}" artifacts/* --clobber
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "${{ needs.setup.outputs.release_tag }}" --draft=false

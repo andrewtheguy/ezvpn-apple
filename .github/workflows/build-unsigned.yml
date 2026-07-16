@@ -1,9 +1,8 @@
 name: Build unsigned Apple apps
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -89,13 +88,13 @@ jobs:
       - name: Upload unsigned iOS app
         uses: actions/upload-artifact@v7
         with:
+          name: release-ios
           path: artifacts/ezvpn-ios-unsigned.tar.gz
-          archive: false
           if-no-files-found: error
 
       - name: Upload unsigned macOS app
         uses: actions/upload-artifact@v7
         with:
+          name: release-macos-arm64
           path: artifacts/ezvpn-macos-unsigned.tar.gz
-          archive: false
           if-no-files-found: error
