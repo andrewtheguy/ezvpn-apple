@@ -32,8 +32,15 @@ extension View {
         #if os(iOS)
         autocorrectionDisabled()
             .textInputAutocapitalization(.never)
+            .multilineTextAlignment(.leading)
         #else
+        // In a grouped Form macOS reserves a label column for the TextField's
+        // (empty) title and butts the control against it on the right, so short
+        // text sits flush right. We already show our own label via LabeledField,
+        // so hide the built-in one: the control then fills the row and left-aligns.
         autocorrectionDisabled()
+            .labelsHidden()
+            .multilineTextAlignment(.leading)
         #endif
     }
 
