@@ -55,14 +55,14 @@ struct TunnelDetailView: View {
                     RouteRow(title: "Tunnel routes (IPv6)", values: info.includedRoutes6)
                     RouteRow(title: "Bypass routes (IPv4)", values: info.bypassRoutes)
                     RouteRow(title: "Bypass routes (IPv6)", values: info.bypassRoutes6)
+                    #if os(iOS)
                     if !info.dnsServers.isEmpty {
                         RouteRow(title: "DNS servers", values: info.dnsServers)
-                        #if os(iOS)
                         RouteRow(title: "DNS match domains",
                                  values: info.dnsMatchDomains.isEmpty
                                     ? ["all domains"] : info.dnsMatchDomains)
-                        #endif
                     }
+                    #endif
                 } header: {
                     Text("Active routes")
                 } footer: {

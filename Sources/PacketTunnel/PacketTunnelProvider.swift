@@ -60,8 +60,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let relayURLs = conf["relay_urls"] as? [String] ?? []
         let routes = conf["routes"] as? [String] ?? []
         let routes6 = conf["routes6"] as? [String] ?? []
+        #if os(iOS)
         let dnsServers = conf["dns_servers"] as? [String] ?? []
         let dnsMatchDomains = conf["dns_match_domains"] as? [String] ?? []
+        #else
+        // macOS deliberately leaves the system's DNS configuration untouched.
+        let dnsServers: [String] = []
+        let dnsMatchDomains: [String] = []
+        #endif
 
         // Refuse to start when a configured split-tunnel prefix overlaps the
         // network the device is currently on: routing the local subnet into the
@@ -197,19 +203,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         settings.mtu = NSNumber(value: mtu)
 
-        // Tunnel DNS is global on macOS. iOS additionally applies match domains
-        // here because it ignores installed DNS-settings profiles while a VPN
-        // is active, making the tunnel the only reliable conditional-forwarding
-        // path on that platform.
+        #if os(iOS)
+        // iOS ignores installed DNS-settings profiles while a VPN is active,
+        // making tunnel DNS the only reliable conditional-forwarding path.
         if !dnsServers.isEmpty {
             let dns = NEDNSSettings(servers: dnsServers)
-            #if os(iOS)
             if !dnsMatchDomains.isEmpty {
                 dns.matchDomains = dnsMatchDomains
                 // Route-only: match domains must not double as search suffixes.
                 dns.matchDomainsNoSearch = true
             }
-            #endif
             settings.dnsSettings = dns
             // A server no tunnel route covers is answered (or not) by the
             // underlying network — usually a misconfiguration for a private
@@ -227,6 +230,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             os_log("ignoring %d DNS match domain(s): no DNS servers configured",
                    log: log, type: .info, dnsMatchDomains.count)
         }
+        #endif
 
         // Snapshot of what is being applied, for the app's debug UI (served
         // via handleAppMessage). Built from the settings object itself so it
@@ -242,10 +246,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             runtime["included_routes6"] = (ipv6.includedRoutes ?? []).map(Self.cidrString)
             runtime["bypass_routes6"] = (ipv6.excludedRoutes ?? []).map(Self.cidrString)
         }
+        #if os(iOS)
         if let dns = settings.dnsSettings {
             runtime["dns_servers"] = dns.servers
             runtime["dns_match_domains"] = dns.matchDomains ?? []
         }
+        #endif
 
         // Publish the handle so stopTunnel can find it, then keep every further
         // touch of it on workQueue. If stopTunnel already ran while the connect

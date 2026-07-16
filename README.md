@@ -2,8 +2,8 @@
 
 A universal native iOS + macOS SwiftUI app and Packet Tunnel app extension that
 runs the [`ezvpn`](../ezvpn) IP-over-QUIC tunnel. **Scope:** dual-stack **split
-tunnel** with optional tunnel DNS, development-signed personal use, and no App
-Store or Developer ID preparation.
+tunnel**, optional tunnel DNS on iOS only, development-signed personal use, and
+no App Store or Developer ID preparation.
 
 It links `libezvpn.xcframework` (the Rust core, built from the sibling `../ezvpn`
 repo and delivered via a local Swift package) into a `NEPacketTunnelProvider`.
@@ -19,10 +19,9 @@ Network Extension owns the `utun` interface, routing, and IP/MTU config.
   extension — each carries its own config in `providerConfiguration`.
 - ✅ IPv4/IPv6 split tunnel. The server gateway/interface routes are always
   routed automatically; extra IPv4 and IPv6 CIDRs are optional.
-- ✅ Optional tunnel DNS on both platforms. iOS also exposes match domains for
-  conditional forwarding because iOS ignores installed DNS profiles while a
-  VPN is active. macOS keeps those profiles active, so its UI exposes only the
-  global tunnel DNS servers field.
+- ✅ Optional tunnel DNS on iOS, including match domains for conditional
+  forwarding because iOS ignores installed DNS profiles while a VPN is active.
+  The macOS build leaves the system's DNS configuration untouched.
 - ✅ Connects to an `ezvpn` server over iroh (direct or relay), handshakes,
   tunnels IP over QUIC datagrams.
 - ✅ Underlay-bypass routing, like the desktop client's bootstrap bypass: at
@@ -45,8 +44,8 @@ Network Extension owns the `utun` interface, routing, and IP/MTU config.
   Wi-Fi): capturing the on-link subnet would cut off the LAN, including the
   gateway carrying the tunnel's own underlay traffic.
 - ✅ Debug: while connected, the app shows the *applied* interface state —
-  assigned addresses, tunnel routes, active bypass (excluded) routes, and DNS
-  settings — queried live from the tunnel process over the WireGuard-style
+  assigned addresses, tunnel routes, active bypass (excluded) routes, and on
+  iOS, DNS settings — queried live from the tunnel process over the WireGuard-style
   runtime-configuration app message (single byte `0`). It can also show a live
   iroh connection-path snapshot (direct/relay paths) via app message byte `1`.
 - ❌ No App Store, TestFlight, or Developer ID setup. The macOS debug flow uses
@@ -126,7 +125,7 @@ checksum in `Packages/Ezvpn/Package.swift`).
    - *Relay URLs* — optional hints; leave blank to use iroh defaults.
    - *IPv4 routes* — optional comma-separated CIDRs to tunnel.
    - *IPv6 routes* — optional comma-separated CIDRs to tunnel.
-   - *DNS servers* — optional comma-separated IP literals to use as tunnel DNS.
+   - *DNS servers* (iOS only) — optional comma-separated IP literals to use as tunnel DNS.
    - *Match domains* (iOS only) — optional comma-separated suffixes for split
      DNS. Leave blank with DNS servers set to send all DNS through those servers.
 
