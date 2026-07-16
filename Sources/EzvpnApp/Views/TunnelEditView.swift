@@ -20,8 +20,10 @@ struct TunnelEditView: View {
     @State private var relayURLs = ""
     @State private var routes = ""
     @State private var routes6 = ""
+    #if os(iOS)
     @State private var dnsServers = ""
     @State private var dnsMatchDomains = ""
+    #endif
     @State private var error: String?
     @State private var saving = false
     @State private var didLoad = false
@@ -43,29 +45,29 @@ struct TunnelEditView: View {
             Section("Profile") {
                 LabeledField("Name") {
                     TextField("", text: $name)
-                        .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        .fieldStyle()
                 }
             }
 
             Section("Server") {
                 LabeledField("Server node id") {
                     TextField("", text: $serverNodeID)
-                        .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        .fieldStyle()
                 }
                 LabeledField("Auth token") {
                     SecureField("", text: $authToken)
-                        .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        .fieldStyle()
                 }
                 LabeledField("Relay URLs", hint: "comma-separated, optional") {
                     TextField("", text: $relayURLs)
-                        .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        .fieldStyle()
                 }
             }
 
             Section {
                 LabeledField("IPv4 routes", hint: "comma-separated, optional") {
                     TextField("", text: $routes)
-                        .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        .fieldStyle()
                 }
             } header: {
                 Text("Split tunnel (IPv4 private CIDRs)")
@@ -76,24 +78,26 @@ struct TunnelEditView: View {
             Section("Split tunnel (IPv6 CIDRs)") {
                 LabeledField("IPv6 routes", hint: "comma-separated, optional") {
                     TextField("", text: $routes6)
-                        .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        .fieldStyle()
                 }
             }
 
+            #if os(iOS)
             Section {
                 LabeledField("DNS servers", hint: "comma-separated IPs, optional") {
                     TextField("", text: $dnsServers)
-                        .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        .fieldStyle()
                 }
                 LabeledField("Match domains", hint: "comma-separated, optional") {
                     TextField("", text: $dnsMatchDomains)
-                        .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        .fieldStyle()
                 }
             } header: {
                 Text("Split DNS (conditional forwarding)")
             } footer: {
                 Text("Names under the match domains resolve via these DNS servers through the tunnel; everything else keeps the network's normal DNS. Needed because iOS ignores installed DNS profiles while a VPN is connected. Servers should sit inside a tunnel route. Empty match domains send all DNS through the servers.")
             }
+            #endif
 
             if let error {
                 Section {
@@ -102,8 +106,14 @@ struct TunnelEditView: View {
             }
         }
         .navigationTitle(isAdd ? "New Profile" : "Edit Profile")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
+        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
+        #endif
+        #if os(macOS)
+        .formStyle(.grouped)
+        .frame(minWidth: 440, minHeight: 520)
+        #endif
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") { dismiss() }
@@ -126,8 +136,10 @@ struct TunnelEditView: View {
         relayURLs = profile.relayURLs.joined(separator: ", ")
         routes = profile.routes.joined(separator: ", ")
         routes6 = profile.routes6.joined(separator: ", ")
+        #if os(iOS)
         dnsServers = profile.dnsServers.joined(separator: ", ")
         dnsMatchDomains = profile.dnsMatchDomains.joined(separator: ", ")
+        #endif
     }
 
     private func save() async {
@@ -135,6 +147,7 @@ struct TunnelEditView: View {
         saving = true
         defer { saving = false }
 
+        #if os(iOS)
         let dnsServerList = splitCSV(dnsServers)
         let dnsMatchDomainList = splitCSV(dnsMatchDomains).map(normalizedDNSMatchDomain)
         if let dnsError = splitDNSValidationError(
@@ -143,6 +156,11 @@ struct TunnelEditView: View {
             error = dnsError
             return
         }
+        #else
+        // macOS keeps the system's existing DNS configuration untouched.
+        let dnsServerList: [String] = []
+        let dnsMatchDomainList: [String] = []
+        #endif
 
         // Preserve the stable id on edit; mint a fresh one on add.
         let id: UUID

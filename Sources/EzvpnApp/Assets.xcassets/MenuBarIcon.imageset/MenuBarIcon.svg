@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Derived from the repository-root icon.svg for monochrome menu-bar use. -->
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="16.5" height="18" viewBox="190 160 644 704">
+  <path d="M 512.0 215.03999999999996 Q 658.432 215.03999999999996 778.24 256.0 L 778.24 512.0 Q 778.24 716.8 512.0 808.96 Q 245.76 716.8 245.76 512.0 L 245.76 256.0 Q 365.568 215.03999999999996 512.0 215.03999999999996 Z"
+        fill="none" stroke="black" stroke-width="51.2"
+        stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="512.0" cy="460.79999999999995" r="66.56" fill="black"/>
+  <path d="M 483.328 465.91999999999996 L 540.672 465.91999999999996 L 565.248 614.4 L 458.752 614.4 Z"
+        fill="black"/>
+</svg>

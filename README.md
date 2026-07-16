@@ -1,13 +1,14 @@
 # ezvpn-ios
 
-A minimal iOS app + Packet Tunnel extension that runs the [`ezvpn`](../ezvpn)
-IP-over-QUIC tunnel on-device. **Scope:** dual-stack **split tunnel** with
-optional split DNS, real-device testing only, no App Store preparation.
+A universal native iOS + macOS SwiftUI app and Packet Tunnel app extension that
+runs the [`ezvpn`](../ezvpn) IP-over-QUIC tunnel. **Scope:** dual-stack **split
+tunnel**, optional tunnel DNS on iOS only, development-signed personal use, and
+no App Store or Developer ID preparation.
 
 It links `libezvpn.xcframework` (the Rust core, built from the sibling `../ezvpn`
 repo and delivered via a local Swift package) into a `NEPacketTunnelProvider`.
-The Rust side does the iroh connect + handshake + datagram loop; iOS owns the
-`utun` interface, routing, and IP/MTU config.
+The Rust side does the iroh connect + handshake + datagram loop; the Apple
+Network Extension owns the `utun` interface, routing, and IP/MTU config.
 
 ## What this app does and does not do
 
@@ -18,10 +19,9 @@ The Rust side does the iroh connect + handshake + datagram loop; iOS owns the
   extension — each carries its own config in `providerConfiguration`.
 - ✅ IPv4/IPv6 split tunnel. The server gateway/interface routes are always
   routed automatically; extra IPv4 and IPv6 CIDRs are optional.
-- ✅ Split DNS / conditional forwarding. Optional DNS server IPs can be applied
-  to the tunnel; optional match domains restrict those resolvers to specific
-  suffixes, while an empty match-domain list sends all DNS to the tunnel DNS
-  servers.
+- ✅ Optional tunnel DNS on iOS, including match domains for conditional
+  forwarding because iOS ignores installed DNS profiles while a VPN is active.
+  The macOS build leaves the system's DNS configuration untouched.
 - ✅ Connects to an `ezvpn` server over iroh (direct or relay), handshakes,
   tunnels IP over QUIC datagrams.
 - ✅ Underlay-bypass routing, like the desktop client's bootstrap bypass: at
@@ -33,6 +33,9 @@ The Rust side does the iroh connect + handshake + datagram loop; iOS owns the
   publications are not re-applied.
 - ✅ Simple manual connect/disconnect. Tunnel teardown follows wireguard-apple:
   `stopTunnel` completes only after the Rust data plane has actually stopped.
+- ✅ On macOS, a native menu-bar icon provides quick profile connect/disconnect,
+  main-window, and quit actions. Closing the main window removes the Dock icon
+  while leaving the menu-bar controls running; reopening restores both.
 - ✅ Disconnect on network change: any change to the physical network (Wi-Fi ↔
   cellular, different Wi-Fi, network lost) cancels the tunnel rather than trying
   to migrate the QUIC session across it — reconnect manually on the new network.
@@ -41,12 +44,14 @@ The Rust side does the iroh connect + handshake + datagram loop; iOS owns the
   Wi-Fi): capturing the on-link subnet would cut off the LAN, including the
   gateway carrying the tunnel's own underlay traffic.
 - ✅ Debug: while connected, the app shows the *applied* interface state —
-  assigned addresses, tunnel routes, active bypass (excluded) routes, and DNS
-  settings — queried live from the tunnel process over the WireGuard-style
+  assigned addresses, tunnel routes, active bypass (excluded) routes, and on
+  iOS, DNS settings — queried live from the tunnel process over the WireGuard-style
   runtime-configuration app message (single byte `0`). It can also show a live
   iroh connection-path snapshot (direct/relay paths) via app message byte `1`.
-- ❌ No App Store / TestFlight setup. No simulator (a Packet Tunnel Provider
-  only runs on a real device).
+- ❌ No App Store, TestFlight, or Developer ID setup. The macOS debug flow uses
+  a development-signed app extension; system extensions are needed only for
+  Developer ID distribution. A Packet Tunnel Provider cannot run in the iOS
+  Simulator.
   
 ## Prerequisites
 
@@ -54,9 +59,12 @@ The Rust side does the iroh connect + handshake + datagram loop; iOS owns the
   capability is not available on free personal teams. Both the app and the
   extension App IDs need the *Network Extensions* capability enabled (Xcode's
   automatic signing will offer to add it, or enable it in the Developer portal).
+  The development Mac must also be registered to the team before Xcode can mint
+  its Mac App Development profiles.
 - Xcode (tested with 26.2) on Apple Silicon.
 - [`xcodegen`](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`.
-- Rust with the iOS target (only for local FFI dev): `rustup target add aarch64-apple-ios`.
+- Rust with the iOS and macOS targets (only for local FFI dev):
+  `rustup target add aarch64-apple-ios aarch64-apple-darwin`.
 
 ## Build & run
 
@@ -64,7 +72,8 @@ The Rust core is delivered as `libezvpn.xcframework` via a local Swift package
 (`Packages/Ezvpn`). Its binary target **downloads the pinned release zip by
 URL+checksum** by default — no local Rust build required. Bump to a newer
 `ezvpn` release with `scripts/bump-xcframework.sh <tag>` (rewrites the URL and
-checksum in `Packages/Ezvpn/Package.swift`).
+checksum in `Packages/Ezvpn/Package.swift` and sets the app/extension marketing
+versions to the release version).
 
 1. **Generate the Xcode project** (SPM fetches the pinned xcframework):
 
@@ -75,16 +84,21 @@ checksum in `Packages/Ezvpn/Package.swift`).
    ```
 
    > **Local FFI dev** — to build against a locally compiled Rust core instead
-   > of the release, build it in the sibling repo and set `EZVPN_LOCAL_XCFRAMEWORK`:
+   > of the release, build it in the sibling repo and set
+   > `EZVPN_LOCAL_XCFRAMEWORK=1` (all other values select the pinned release):
    >
    > ```sh
-   > cd ../ezvpn && ./build-ios.sh release && cd ../ezvpn-ios
-   > EZVPN_LOCAL_XCFRAMEWORK=1 xcodegen generate
-   > # …and pass the same env var to xcodebuild / Xcode when building.
+   > cd ../ezvpn && ./build-apple.sh release && cd ../ezvpn-ios
+   > scripts/run-macos.sh
    > ```
    >
+   > The run scripts default to the local artifact and keep the setting scoped
+   > to their complete generate/build workflow; use `--pinned` to opt out. When
+   > bypassing them, prefix both `xcodegen` and `xcodebuild` with
+   > `EZVPN_LOCAL_XCFRAMEWORK=1`.
+   >
    > SPM forbids binary paths outside the package root, so the sibling's
-   > `dist/ios` is reached via the committed symlink
+   > `dist/apple` is reached via the committed symlink
    > `Packages/Ezvpn/local/libezvpn.xcframework`.
 
 2. **Set signing.** Select your Team on **both** targets (`EzvpnApp` and
@@ -97,8 +111,17 @@ checksum in `Packages/Ezvpn/Package.swift`).
    `Sources/EzvpnApp/TunnelsManager.swift` to match the extension's id (it must
    be a prefix-child of the app id, e.g. `com.you.ezvpn` + `.PacketTunnel`).
 
-3. **Run on a real device** (select your iPhone, not a simulator). On first
-   connect, iOS prompts to allow the VPN configuration.
+3. **Run the app.** For macOS, build and open the native app with:
+
+   ```sh
+   scripts/run-macos.sh
+   ```
+
+   This uses the local XCFramework by default; pass `--pinned` for the release
+   artifact or `--install` to copy the app to `/Applications` if the extension
+   does not register from DerivedData. For iOS, select a physical device in
+   Xcode or use `scripts/run-device-ios.sh <DEVICE_ID>`. The OS prompts to allow
+   the VPN configuration on first connect.
 
 4. **Add a profile** (tap `+`), fill in the details, Save, then toggle it on:
    - *Name* — a unique label for the profile (shown in the list and Settings > VPN).
@@ -107,9 +130,9 @@ checksum in `Packages/Ezvpn/Package.swift`).
    - *Relay URLs* — optional hints; leave blank to use iroh defaults.
    - *IPv4 routes* — optional comma-separated CIDRs to tunnel.
    - *IPv6 routes* — optional comma-separated CIDRs to tunnel.
-   - *DNS servers* — optional comma-separated IP literals to use as tunnel DNS.
-   - *Match domains* — optional comma-separated suffixes for split DNS. Leave
-     blank with DNS servers set to send all DNS through those servers.
+   - *DNS servers* (iOS only) — optional comma-separated IP literals to use as tunnel DNS.
+   - *Match domains* (iOS only) — optional comma-separated suffixes for split
+     DNS. Leave blank with DNS servers set to send all DNS through those servers.
 
    Add as many profiles as you like; only one connects at a time.
 
@@ -121,8 +144,7 @@ checksum in `Packages/Ezvpn/Package.swift`).
 
 The pure IP/CIDR logic (prefix overlap, netmask math, the split-tunnel vs
 local-network conflict check) lives in the local package `Packages/TunnelCore`
-so it can be tested natively on the Mac — the app targets are device-only and
-can't host a test bundle:
+so it can be tested natively on the Mac, outside the app and extension targets:
 
 ```sh
 cd Packages/TunnelCore && swift test
@@ -152,19 +174,23 @@ shapes.
 ## Logs
 
 The extension logs to the unified log (subsystem
-`com.example.ezvpn.PacketTunnel`). Watch with:
+`com.andrewtheguy.ezvpn.PacketTunnel`). Watch with:
 
 ```sh
-log stream --predicate 'subsystem == "com.example.ezvpn.PacketTunnel"' --level debug
+log stream --predicate 'subsystem == "com.andrewtheguy.ezvpn.PacketTunnel"' --level debug
 ```
 
 Rust-side logs go to stderr (honors `RUST_LOG`, default `info`) and are captured
-into the device log as well.
+in the device or Mac log as well.
 
 ## Notes
 
 - One benign linker warning (`blake3_neon.o was built for newer iOS version`)
   comes from a dependency's hand-written assembly object; it links and runs
   fine.
+- If the macOS app extension does not appear, check for stale or duplicate
+  providers with
+  `pluginkit -m -p com.apple.networkextension.packet-tunnel`; retry
+  `scripts/run-macos.sh --install` if DerivedData registration is the issue.
 - Regenerate the project (`xcodegen generate`) after editing `project.yml`. The
   `.xcodeproj` is git-ignored on purpose.

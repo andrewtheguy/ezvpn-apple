@@ -55,16 +55,22 @@ struct TunnelDetailView: View {
                     RouteRow(title: "Tunnel routes (IPv6)", values: info.includedRoutes6)
                     RouteRow(title: "Bypass routes (IPv4)", values: info.bypassRoutes)
                     RouteRow(title: "Bypass routes (IPv6)", values: info.bypassRoutes6)
+                    #if os(iOS)
                     if !info.dnsServers.isEmpty {
                         RouteRow(title: "DNS servers", values: info.dnsServers)
                         RouteRow(title: "DNS match domains",
                                  values: info.dnsMatchDomains.isEmpty
                                     ? ["all domains"] : info.dnsMatchDomains)
                     }
+                    #endif
                 } header: {
                     Text("Active routes")
                 } footer: {
+                    #if os(macOS)
+                    Text("Bypass routes are server underlay/relay addresses excluded from the tunnel so its own transport is never captured. Use Refresh to update.")
+                    #else
                     Text("Bypass routes are server underlay/relay addresses excluded from the tunnel so its own transport is never captured. Pull to refresh.")
+                    #endif
                 }
 
                 // Debug readout of the live iroh path(s) (relay vs direct),
@@ -84,9 +90,25 @@ struct TunnelDetailView: View {
             }
         }
         .navigationTitle(tunnel.name)
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
+        #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
+        #endif
+        #if os(macOS)
+        .formStyle(.grouped)
+        #endif
         .refreshable { await tunnel.refreshRuntimeInfo() }
+        #if os(macOS)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await tunnel.refreshRuntimeInfo() }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        #endif
         .sheet(isPresented: $showingEdit) {
             NavigationStack { TunnelEditView(mode: .edit(tunnel)) }
         }

@@ -6,18 +6,18 @@ import TunnelCore
 
 /// The Packet Tunnel Provider: the process the OS runs to carry VPN traffic.
 ///
-/// It bridges iOS's `NEPacketTunnelProvider` to the Rust core (libezvpn.a):
+/// It bridges Apple's `NEPacketTunnelProvider` to the Rust core (libezvpn.a):
 /// configure the tunnel interface from the server's handshake, hand the `utun`
 /// fd to Rust, and let Rust run the iroh/QUIC datagram loop.
 class PacketTunnelProvider: NEPacketTunnelProvider {
-    private let log = OSLog(subsystem: "com.example.ezvpn.PacketTunnel", category: "tunnel")
+    private let log = OSLog(subsystem: "com.andrewtheguy.ezvpn.PacketTunnel", category: "tunnel")
     private var handle: OpaquePointer?
 
     /// Serializes backend teardown and runtime-config queries, mirroring
     /// WireGuardAdapter's private work queue: `stopTunnel` completes only
     /// after `ezvpn_stop` has actually returned, and never blocks the
     /// provider's calling queue while the Rust side shuts down.
-    private let workQueue = DispatchQueue(label: "com.example.ezvpn.PacketTunnel.workQueue")
+    private let workQueue = DispatchQueue(label: "com.andrewtheguy.ezvpn.PacketTunnel.workQueue")
 
     /// What was actually applied to the interface (assigned addresses, tunnel
     /// routes, bypass routes, MTU), kept so the app can query it over
@@ -60,8 +60,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let relayURLs = conf["relay_urls"] as? [String] ?? []
         let routes = conf["routes"] as? [String] ?? []
         let routes6 = conf["routes6"] as? [String] ?? []
+        #if os(iOS)
         let dnsServers = conf["dns_servers"] as? [String] ?? []
         let dnsMatchDomains = conf["dns_match_domains"] as? [String] ?? []
+        #else
+        // macOS deliberately leaves the system's DNS configuration untouched.
+        let dnsServers: [String] = []
+        let dnsMatchDomains: [String] = []
+        #endif
 
         // Refuse to start when a configured split-tunnel prefix overlaps the
         // network the device is currently on: routing the local subnet into the
@@ -197,12 +203,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         settings.mtu = NSNumber(value: mtu)
 
-        // Split DNS (conditional forwarding): names under the match domains
-        // resolve via the tunnel's DNS servers; every other name keeps the
-        // physical network's resolvers. This must live on the tunnel — iOS
-        // ignores installed DNS-settings profiles (com.apple.dnsSettings.managed)
-        // while any VPN is up, so a profile-based split DNS goes dark the
-        // moment this tunnel connects.
+        #if os(iOS)
+        // iOS ignores installed DNS-settings profiles while a VPN is active,
+        // making tunnel DNS the only reliable conditional-forwarding path.
         if !dnsServers.isEmpty {
             let dns = NEDNSSettings(servers: dnsServers)
             if !dnsMatchDomains.isEmpty {
@@ -227,6 +230,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             os_log("ignoring %d DNS match domain(s): no DNS servers configured",
                    log: log, type: .info, dnsMatchDomains.count)
         }
+        #endif
 
         // Snapshot of what is being applied, for the app's debug UI (served
         // via handleAppMessage). Built from the settings object itself so it
@@ -242,10 +246,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             runtime["included_routes6"] = (ipv6.includedRoutes ?? []).map(Self.cidrString)
             runtime["bypass_routes6"] = (ipv6.excludedRoutes ?? []).map(Self.cidrString)
         }
+        #if os(iOS)
         if let dns = settings.dnsSettings {
             runtime["dns_servers"] = dns.servers
             runtime["dns_match_domains"] = dns.matchDomains ?? []
         }
+        #endif
 
         // Publish the handle so stopTunnel can find it, then keep every further
         // touch of it on workQueue. If stopTunnel already ran while the connect
@@ -433,7 +439,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     // MARK: - Helpers
 
     private static func error(_ message: String) -> NSError {
-        NSError(domain: "com.example.ezvpn", code: 1,
+        NSError(domain: "com.andrewtheguy.ezvpn", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: message])
     }
 
@@ -511,11 +517,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// Locate the `utun` file descriptor the OS created for this tunnel.
     ///
-    /// NetworkExtension does not hand the fd to us directly. The iOS SDK omits
-    /// `<sys/kern_control.h>`, so we use the portable technique: probe each open
-    /// fd with the `UTUN_OPT_IFNAME` control-socket option and keep the one
-    /// whose interface name starts with `utun`. The constants are hardcoded
-    /// because their headers are unavailable on iOS:
+    /// NetworkExtension does not hand the fd to us directly. On iOS and macOS,
+    /// probe each open fd with the `UTUN_OPT_IFNAME` control-socket option and
+    /// keep the one whose interface name starts with `utun`. The constants are
+    /// hardcoded because the iOS SDK does not expose the required headers:
     ///   SYSPROTO_CONTROL = 2 (sys/sys_domain.h),
     ///   UTUN_OPT_IFNAME  = 2 (net/if_utun.h).
     private var tunnelFileDescriptor: Int32? {
