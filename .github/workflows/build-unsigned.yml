@@ -1,0 +1,101 @@
+name: Build unsigned Apple apps
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unsigned-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build iOS and macOS
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Show build environment
+        run: |
+          uname -m
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Test TunnelCore
+        working-directory: Packages/TunnelCore
+        run: swift test
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned iOS app
+        run: |
+          xcodebuild build \
+            -project Ezvpn.xcodeproj \
+            -scheme EzvpnApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -sdk iphoneos \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-iOS" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM="" \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Build unsigned macOS app
+        run: |
+          xcodebuild build \
+            -project Ezvpn.xcodeproj \
+            -scheme EzvpnApp \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            -sdk macosx \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-macOS" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM="" \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Package app bundles
+        run: |
+          set -euo pipefail
+
+          ios_app="$RUNNER_TEMP/DerivedData-iOS/Build/Products/Release-iphoneos/EzvpnApp.app"
+          macos_app="$RUNNER_TEMP/DerivedData-macOS/Build/Products/Release/EzvpnApp.app"
+
+          test -d "$ios_app"
+          test -d "$macos_app"
+
+          mkdir -p artifacts
+          tar -C "$(dirname "$ios_app")" \
+            -czf artifacts/ezvpn-ios-unsigned.tar.gz \
+            "$(basename "$ios_app")"
+          tar -C "$(dirname "$macos_app")" \
+            -czf artifacts/ezvpn-macos-unsigned.tar.gz \
+            "$(basename "$macos_app")"
+
+      - name: Upload unsigned iOS app
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts/ezvpn-ios-unsigned.tar.gz
+          archive: false
+          if-no-files-found: error
+
+      - name: Upload unsigned macOS app
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts/ezvpn-macos-unsigned.tar.gz
+          archive: false
+          if-no-files-found: error
