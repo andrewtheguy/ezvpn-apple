@@ -52,19 +52,29 @@ enum AuthTokenKeychain {
     }
 
     static func token(for persistentReference: Data) throws -> String {
-        var query: [String: Any] = [
+        let query: [String: Any]
+        #if os(macOS)
+        // macOS resolves persistent references through kSecMatchItemList and
+        // still needs the class/access-group/data-protection constraints.
+        query = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccessGroup as String: try accessGroup(),
+            kSecMatchItemList as String: [persistentReference],
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecUseDataProtectionKeychain as String: true,
         ]
-        #if os(macOS)
-        // macOS resolves persistent references through kSecMatchItemList;
-        // kSecValuePersistentRef is the iOS-family query form.
-        query[kSecMatchItemList as String] = [persistentReference]
         #else
-        query[kSecValuePersistentRef as String] = persistentReference
+        // iOS resolves the item by persistent reference alone: the ref already
+        // encodes the item's identity and access group. Adding kSecClass,
+        // kSecAttrAccessGroup, kSecMatchLimit, or kSecUseDataProtectionKeychain
+        // alongside kSecValuePersistentRef makes SecItemCopyMatching fail with
+        // errSecParam (-50, "one or more parameters passed to a function were
+        // not valid").
+        query = [
+            kSecValuePersistentRef as String: persistentReference,
+            kSecReturnData as String: true,
+        ]
         #endif
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
