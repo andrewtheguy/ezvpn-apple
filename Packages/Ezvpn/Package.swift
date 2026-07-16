@@ -17,7 +17,11 @@ import PackageDescription
 // symlink local/libezvpn.xcframework, which points at sibling
 // ../ezvpn/dist/apple/libezvpn.xcframework. All other values use the pinned
 // release:
-//   EZVPN_LOCAL_XCFRAMEWORK=1 xcodegen generate && ... xcodebuild ...
+//   EZVPN_LOCAL_XCFRAMEWORK=1 ./scripts/run-macos.sh
+// The run scripts already default to local and scope the setting across project
+// generation and the build. If invoking the tools manually, prefix both:
+//   EZVPN_LOCAL_XCFRAMEWORK=1 xcodegen generate
+//   EZVPN_LOCAL_XCFRAMEWORK=1 xcodebuild ...
 
 func localBinaryTarget() -> Target? {
     guard ProcessInfo.processInfo.environment["EZVPN_LOCAL_XCFRAMEWORK"] == "1"

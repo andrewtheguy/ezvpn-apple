@@ -89,9 +89,13 @@ versions to the release version).
    >
    > ```sh
    > cd ../ezvpn && ./build-apple.sh release && cd ../ezvpn-ios
-   > EZVPN_LOCAL_XCFRAMEWORK=1 xcodegen generate
-   > # …and pass the same env var to xcodebuild / Xcode when building.
+   > scripts/run-macos.sh
    > ```
+   >
+   > The run scripts default to the local artifact and keep the setting scoped
+   > to their complete generate/build workflow; use `--pinned` to opt out. When
+   > bypassing them, prefix both `xcodegen` and `xcodebuild` with
+   > `EZVPN_LOCAL_XCFRAMEWORK=1`.
    >
    > SPM forbids binary paths outside the package root, so the sibling's
    > `dist/apple` is reached via the committed symlink
