@@ -119,7 +119,14 @@ final class TunnelsManager: ObservableObject {
             try await manager.saveToPreferences()
             try await manager.loadFromPreferences()
         } catch {
-            try? AuthTokenKeychain.delete(for: profile.id)
+            // Roll back the token stored for this never-saved profile. Its id is
+            // a fresh UUID no saved profile references, so a swallowed delete
+            // failure would leak the Keychain item forever — surface it instead.
+            do {
+                try AuthTokenKeychain.delete(for: profile.id)
+            } catch let rollbackError {
+                throw compoundSystemError(primary: error, rollback: [rollbackError])
+            }
             throw TunnelsManagerError.system(error)
         }
 
@@ -148,7 +155,17 @@ final class TunnelsManager: ObservableObject {
         var profile = profile
         profile.name = name
 
-        let previousToken = try? tunnel.authToken()
+        // Read the existing token before any mutation so a rollback can restore
+        // it. A genuinely absent token (nothing to restore) is fine; a read
+        // failure must abort before we touch the Keychain or preferences.
+        let previousToken: String?
+        do {
+            previousToken = try tunnel.authToken()
+        } catch AuthTokenKeychainError.missingPersistentReference {
+            previousToken = nil
+        } catch {
+            throw TunnelsManagerError.system(error)
+        }
         let passwordReference: Data
         do {
             passwordReference = try AuthTokenKeychain.store(
@@ -165,13 +182,28 @@ final class TunnelsManager: ObservableObject {
             try await tunnel.manager.saveToPreferences()
             try await tunnel.manager.loadFromPreferences()
         } catch {
-            if let previousToken {
-                _ = try? AuthTokenKeychain.store(previousToken, for: profile.id)
-            } else {
-                try? AuthTokenKeychain.delete(for: profile.id)
+            // Best-effort rollback of both the Keychain token and the in-memory
+            // manager config; attempt both, but surface any rollback failure
+            // instead of hiding it. The preference failure stays the primary.
+            var rollbackErrors: [Error] = []
+            do {
+                if let previousToken {
+                    _ = try AuthTokenKeychain.store(previousToken, for: profile.id)
+                } else {
+                    try AuthTokenKeychain.delete(for: profile.id)
+                }
+            } catch let rollbackError {
+                rollbackErrors.append(rollbackError)
             }
-            try? await tunnel.manager.loadFromPreferences()
-            throw TunnelsManagerError.system(error)
+            do {
+                try await tunnel.manager.loadFromPreferences()
+            } catch let rollbackError {
+                rollbackErrors.append(rollbackError)
+            }
+            if rollbackErrors.isEmpty {
+                throw TunnelsManagerError.system(error)
+            }
+            throw compoundSystemError(primary: error, rollback: rollbackErrors)
         }
         tunnel.setName(name)
         tunnels.sort { tunnelNameIsLessThan($0.name, $1.name) }
@@ -197,6 +229,24 @@ final class TunnelsManager: ObservableObject {
         } catch {
             throw TunnelsManagerError.system(error)
         }
+    }
+
+    /// Combine a primary failure with one or more rollback failures so the
+    /// rollback problem is surfaced rather than silently dropped, while the
+    /// primary failure stays the root cause (both localized and chained).
+    private func compoundSystemError(
+        primary: Error, rollback rollbackErrors: [Error]
+    ) -> TunnelsManagerError {
+        let detail = rollbackErrors
+            .map { $0.localizedDescription }
+            .joined(separator: "; ")
+        let combined = NSError(domain: "ezvpn", code: 1, userInfo: [
+            NSLocalizedDescriptionKey:
+                "\(primary.localizedDescription) "
+                + "Rolling back the change also failed: \(detail)",
+            NSUnderlyingErrorKey: primary as NSError,
+        ])
+        return .system(combined)
     }
 
     // MARK: - Activation
