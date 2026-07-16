@@ -101,14 +101,14 @@ versions to the release version).
    > `dist/apple` is reached via the committed symlink
    > `Packages/Ezvpn/local/libezvpn.xcframework`.
 
-2. **Set signing.** Select your Team on **both** targets (`EzvpnApp` and
+2. **Set signing.** Select your Team on **both** targets (`Ezvpn` and
    `PacketTunnel`) under *Signing & Capabilities*. For repeatable command-line
    builds, copy `Developer.local.xcconfig.sample` to
    `Developer.local.xcconfig`, set `DEVELOPMENT_TEAM`, and re-run
    `xcodegen generate`.
 
    If you change the bundle identifiers, update `providerBundleID` in
-   `Sources/EzvpnApp/TunnelsManager.swift` to match the extension's id (it must
+   `Sources/Ezvpn/TunnelsManager.swift` to match the extension's id (it must
    be a prefix-child of the app id, e.g. `com.you.ezvpn` + `.PacketTunnel`).
 
 3. **Run the app.** For macOS, build and open the native app with:
@@ -154,7 +154,7 @@ cd Packages/TunnelCore && swift test
 
 ```
 ┌─────────────────────────┐        ┌──────────────────────────────┐
-│ EzvpnApp (SwiftUI)      │        │ PacketTunnel (extension)     │
+│ Ezvpn (SwiftUI)         │        │ PacketTunnel (extension)     │
 │ NETunnelProviderManager │──VPN──▶│ NEPacketTunnelProvider       │
 │  installs config,       │ config │  startTunnel:                │
 │  start/stop             │        │   ezvpn_connect(json) ───────┼──▶ libezvpn

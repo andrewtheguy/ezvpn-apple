@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build, install, and launch EzvpnApp on a paired physical iOS device.
+# Build, install, and launch Ezvpn on a paired physical iOS device.
 #
 # The device identifier is REQUIRED (there is usually more than one device
 # paired, and picking the wrong one silently is worse than asking). Find it with:
@@ -17,7 +17,7 @@ set -euo pipefail
 
 APP_NAME="ezvpn"
 PROJECT_NAME="Ezvpn"
-SCHEME="EzvpnApp"
+SCHEME="Ezvpn"
 BUNDLE_ID="com.andrewtheguy.ezvpn"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -27,7 +27,7 @@ Usage:
   scripts/run-device-ios.sh <DEVICE_ID> [options]
   scripts/run-device-ios.sh --device <DEVICE_ID> [options]
 
-Builds EzvpnApp, installs it on the given paired device, and launches it.
+Builds Ezvpn, installs it on the given paired device, and launches it.
 Find DEVICE_ID (the CoreDevice IDENTIFIER) with scripts/list-devices-ios.sh.
 
 Options:
@@ -144,7 +144,7 @@ fi
   die "${PROJECT_NAME}.xcodeproj not found — drop --no-generate or run 'xcodegen generate'"
 
 DERIVED_DATA="$PROJECT_ROOT/build/DerivedData"
-APP_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphoneos/${SCHEME}.app"
+APP_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphoneos/${APP_NAME}.app"
 
 provisioning_args=()
 [[ "$ALLOW_PROVISIONING_UPDATES" == "1" ]] && provisioning_args=(-allowProvisioningUpdates)

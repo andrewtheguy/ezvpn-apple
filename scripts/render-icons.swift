@@ -1,6 +1,6 @@
 #!/usr/bin/env swift
 
-// Renders the app icon (iOS only) into Sources/EzvpnApp/Assets.xcassets/
+// Renders the app icon (iOS only) into Sources/Ezvpn/Assets.xcassets/
 // AppIcon.appiconset and emits a source-of-truth icon.svg, mirroring
 // ../flextunnel-ios/scripts/render-icons.swift.
 //
@@ -54,7 +54,7 @@ let repoRoot = absoluteURL(for: CommandLine.arguments[0])
     .standardizedFileURL
     .deletingLastPathComponent()   // scripts/
     .deletingLastPathComponent()   // repo root
-let outDir = repoRoot.appendingPathComponent("Sources/EzvpnApp/Assets.xcassets/AppIcon.appiconset")
+let outDir = repoRoot.appendingPathComponent("Sources/Ezvpn/Assets.xcassets/AppIcon.appiconset")
 
 // MARK: - Shared geometry (CG coordinates, origin bottom-left, y up)
 

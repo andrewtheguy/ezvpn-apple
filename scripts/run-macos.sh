@@ -5,7 +5,8 @@ set -euo pipefail
 # Local Rust XCFramework is the default; pass --pinned for the release artifact.
 
 PROJECT_NAME="Ezvpn"
-SCHEME="EzvpnApp"
+SCHEME="Ezvpn"
+APP_NAME="ezvpn"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
@@ -13,7 +14,7 @@ usage() {
 Usage:
   scripts/run-macos.sh [options]
 
-Builds and opens the native macOS EzvpnApp with automatic development signing.
+Builds and opens the native macOS Ezvpn app with automatic development signing.
 
 Options:
   -t, --team-id TEAM_ID       Developer Team ID.
@@ -90,7 +91,7 @@ echo "Generating project (local xcframework: $USE_LOCAL_XCFRAMEWORK) ..."
 ( cd "$PROJECT_ROOT" && xcodegen generate )
 
 DERIVED_DATA="$PROJECT_ROOT/build/DerivedData"
-APP_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}/${SCHEME}.app"
+APP_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}/${APP_NAME}.app"
 
 echo "Building ${SCHEME} for macOS:"
 printf '  configuration: %s\n' "$CONFIGURATION"
@@ -108,7 +109,7 @@ printf '  team:          %s\n' "$TEAM_ID"
 [[ -d "$APP_PATH" ]] || die "build did not produce an app at $APP_PATH"
 
 if [[ "$INSTALL" == "1" ]]; then
-  INSTALL_PATH="/Applications/${SCHEME}.app"
+  INSTALL_PATH="/Applications/${APP_NAME}.app"
   if [[ -e "$INSTALL_PATH" ]]; then
     /bin/rm -rf "$INSTALL_PATH"
   fi

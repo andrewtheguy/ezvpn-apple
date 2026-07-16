@@ -41,7 +41,7 @@ jobs:
         run: |
           xcodebuild build \
             -project Ezvpn.xcodeproj \
-            -scheme EzvpnApp \
+            -scheme Ezvpn \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -sdk iphoneos \
@@ -56,7 +56,7 @@ jobs:
         run: |
           xcodebuild build \
             -project Ezvpn.xcodeproj \
-            -scheme EzvpnApp \
+            -scheme Ezvpn \
             -configuration Release \
             -destination 'platform=macOS,arch=arm64' \
             -sdk macosx \
@@ -71,8 +71,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          ios_app="$RUNNER_TEMP/DerivedData-iOS/Build/Products/Release-iphoneos/EzvpnApp.app"
-          macos_app="$RUNNER_TEMP/DerivedData-macOS/Build/Products/Release/EzvpnApp.app"
+          ios_app="$RUNNER_TEMP/DerivedData-iOS/Build/Products/Release-iphoneos/ezvpn.app"
+          macos_app="$RUNNER_TEMP/DerivedData-macOS/Build/Products/Release/ezvpn.app"
 
           test -d "$ios_app"
           test -d "$macos_app"

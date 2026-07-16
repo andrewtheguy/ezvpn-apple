@@ -8,7 +8,7 @@ enum EzvpnScene {
 }
 
 @main
-struct EzvpnApp: App {
+struct Ezvpn: App {
     @StateObject private var manager = TunnelsManager()
 
     var body: some Scene {

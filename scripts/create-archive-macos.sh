@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_NAME="ezvpn"
 PROJECT_NAME="Ezvpn"
-SCHEME="EzvpnApp"
+SCHEME="Ezvpn"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
