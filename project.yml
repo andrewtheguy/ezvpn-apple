@@ -127,7 +127,7 @@ targetTemplates:
           - -framework
           - CoreWLAN
         MARKETING_VERSION: "0.0.23"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "2"
     dependencies:
       - sdk: NetworkExtension.framework
       # Static-library XCFramework delivered via the sibling's Swift package
@@ -168,7 +168,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Sources/Ezvpn/Info.plist
         MARKETING_VERSION: "0.0.23"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "2"
       configs:
         Debug:
           "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Sources/Ezvpn/Ezvpn.macOS.debug.entitlements
