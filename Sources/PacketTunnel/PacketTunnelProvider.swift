@@ -56,13 +56,27 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         let serverNodeID = conf["server_node_id"] as? String ?? ""
-        guard let passwordReference = proto.passwordReference else {
-            completionHandler(Self.error("missing auth-token Keychain reference"))
-            return
-        }
         let authToken: String
         do {
+            #if os(macOS)
+            // The system extension runs as a root daemon with no legacy
+            // keychain, so the token is read by identity from the
+            // data-protection keychain (see AuthTokenKeychain).
+            guard
+                let idString = conf[ProviderConfigKey.profileID] as? String,
+                let profileID = UUID(uuidString: idString)
+            else {
+                completionHandler(Self.error("missing profile_id in providerConfiguration"))
+                return
+            }
+            authToken = try AuthTokenKeychain.token(forProfileID: profileID)
+            #else
+            guard let passwordReference = proto.passwordReference else {
+                completionHandler(Self.error("missing auth-token Keychain reference"))
+                return
+            }
             authToken = try AuthTokenKeychain.token(for: passwordReference)
+            #endif
         } catch {
             completionHandler(Self.error("failed to load auth token: \(error.localizedDescription)"))
             return

@@ -59,9 +59,13 @@ final class TunnelContainer: ObservableObject, Identifiable {
         return TunnelProfile.from(providerConfiguration: conf, name: name)
     }
 
-    /// Load the profile's token through the Keychain persistent reference only
-    /// when the editor or a rollback operation needs it.
+    /// Load the profile's token from the Keychain only when the editor or a
+    /// rollback operation needs it. macOS reads by profile identity, iOS
+    /// through the persistent reference (see AuthTokenKeychain for why).
     func authToken() throws -> String {
+        #if os(macOS)
+        return try AuthTokenKeychain.token(forProfileID: id)
+        #else
         guard
             let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,
             let reference = proto.passwordReference
@@ -69,6 +73,7 @@ final class TunnelContainer: ObservableObject, Identifiable {
             throw AuthTokenKeychainError.missingPersistentReference
         }
         return try AuthTokenKeychain.token(for: reference)
+        #endif
     }
 
     /// The profile's stable UUID, read from the manager's providerConfiguration.

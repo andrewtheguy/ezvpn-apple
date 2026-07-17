@@ -80,41 +80,51 @@ enum AuthTokenKeychain {
         }
     }
 
+    #if os(iOS)
+    /// iOS-only: resolve the token through the `passwordReference` persistent
+    /// ref stored on the `NETunnelProviderProtocol`. The ref already encodes
+    /// the item's identity and access group. Adding kSecClass,
+    /// kSecAttrAccessGroup, kSecMatchLimit, or kSecUseDataProtectionKeychain
+    /// alongside kSecValuePersistentRef makes SecItemCopyMatching fail with
+    /// errSecParam (-50, "one or more parameters passed to a function were
+    /// not valid").
     static func token(
         for persistentReference: Data,
         client: AuthTokenKeychainClient = .security
     ) throws -> String {
-        let query: [String: Any]
-        #if os(macOS)
-        // macOS resolves persistent references through kSecMatchItemList and
-        // still needs the class/access-group/data-protection constraints.
-        query = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccessGroup as String: try accessGroup(),
-            kSecMatchItemList as String: [persistentReference],
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecUseDataProtectionKeychain as String: true,
-        ]
-        #else
-        // iOS resolves the item by persistent reference alone: the ref already
-        // encodes the item's identity and access group. Adding kSecClass,
-        // kSecAttrAccessGroup, kSecMatchLimit, or kSecUseDataProtectionKeychain
-        // alongside kSecValuePersistentRef makes SecItemCopyMatching fail with
-        // errSecParam (-50, "one or more parameters passed to a function were
-        // not valid").
-        query = [
+        try decodeToken(client.copyMatching([
             kSecValuePersistentRef as String: persistentReference,
             kSecReturnData as String: true,
-        ]
-        #endif
-        let (status, result) = client.copyMatching(query)
-        guard status == errSecSuccess else {
+        ]))
+    }
+    #endif
+
+    /// Resolve the token by item identity (service + profile UUID + access
+    /// group) in the data-protection keychain. macOS uses this everywhere:
+    /// the packet-tunnel system extension is a root daemon with no legacy
+    /// keychain search list, and resolving a persistent reference routes
+    /// through the legacy engine, which fails there with errSecNotAvailable
+    /// ("No keychain is available"). An identity query stays entirely in the
+    /// data-protection keychain, which daemons can read.
+    static func token(
+        forProfileID profileID: UUID,
+        client: AuthTokenKeychainClient = .security
+    ) throws -> String {
+        var query = try identityQuery(for: profileID)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        return try decodeToken(client.copyMatching(query))
+    }
+
+    private static func decodeToken(
+        _ result: AuthTokenKeychainClient.Result
+    ) throws -> String {
+        guard result.status == errSecSuccess else {
             throw AuthTokenKeychainError.security(
-                operation: "load auth token", status: status)
+                operation: "load auth token", status: result.status)
         }
         guard
-            let data = result as? Data,
+            let data = result.value as? Data,
             let token = String(data: data, encoding: .utf8),
             !token.isEmpty
         else {
