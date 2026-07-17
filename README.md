@@ -220,16 +220,18 @@ One-time Apple-side setup (the script cannot do these for you):
 
 1. Create a **Developer ID Application** certificate: Xcode › Settings ›
    Accounts › Manage Certificates › **+** › *Developer ID Application*.
-2. Get the **Developer ID provisioning profiles** for the app and the extension
-   onto the machine (`~/Library/Developer/Xcode/UserData/Provisioning Profiles`).
-   Xcode generates them ("Mac Team Direct Provisioning Profile: …") the first
-   time you run a Direct Distribution from the Organizer, or any
-   `xcodebuild -exportArchive -allowProvisioningUpdates` with method
-   developer-id; they then stay valid for years. The script signs with
-   `codesign` directly because xcodebuild cannot: automatic signing archives
-   with a development identity that cannot carry the release entitlements'
+2. Create the two **manually managed Developer ID provisioning profiles** that
+   `project.yml` pins by name for Release macOS builds — "ezvpn Developer ID
+   app" (App ID `<prefix>`) and "ezvpn Developer ID sysex" (App ID
+   `<prefix>.PacketTunnel`) — on the developer portal (Certificates,
+   Identifiers & Profiles › Profiles › + › Developer ID, or via the App Store
+   Connect API with an Admin key, `profileType: MAC_APP_DIRECT`). Once they
+   exist, `-allowProvisioningUpdates` downloads them on any machine. They must
+   be manually managed: Release macOS builds sign manually with Developer ID
+   (automatic signing can only archive with a development identity, whose
+   profile cannot carry the release entitlements'
    `packet-tunnel-provider-systemextension` value, and manual signing refuses
-   Xcode-managed profiles.
+   Xcode-managed profiles).
 3. Create an **App Store Connect API key** for notarization (App Store Connect ›
    Users and Access › Integrations › App Store Connect API) and download its
    `AuthKey_XXXX.p8`. Cache it as a notarytool profile once:

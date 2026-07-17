@@ -174,6 +174,16 @@ targets:
           "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Sources/Ezvpn/Ezvpn.macOS.debug.entitlements
         Release:
           "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Sources/Ezvpn/Ezvpn.macOS.entitlements
+          # Release macOS builds sign manually with Developer ID: automatic
+          # signing can only archive with a development identity, whose profile
+          # cannot grant the "-systemextension" entitlement above. The named
+          # profiles are manually managed (created via the App Store Connect
+          # API), so xcodebuild accepts them for manual signing and
+          # -allowProvisioningUpdates can download them on a fresh machine.
+          # CI is unaffected (it builds with CODE_SIGNING_ALLOWED=NO).
+          "CODE_SIGN_STYLE[sdk=macosx*]": Manual
+          "CODE_SIGN_IDENTITY[sdk=macosx*]": "Developer ID Application"
+          "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]": "ezvpn Developer ID app"
     dependencies:
       # The packet-tunnel provider ships as an app extension on iOS (the only
       # option there) and a system extension on macOS (required for Developer ID
@@ -252,8 +262,12 @@ targets:
       configs:
         # Entitlements vary by config like the app target: Debug (development
         # signing) uses the base networkextension value, Release (Developer ID)
-        # the "-systemextension" variant.
+        # the "-systemextension" variant, signed manually like the app (see the
+        # app target's Release config for why).
         Debug:
           CODE_SIGN_ENTITLEMENTS: Sources/PacketTunnel/PacketTunnel.macOS.debug.entitlements
         Release:
           CODE_SIGN_ENTITLEMENTS: Sources/PacketTunnel/PacketTunnel.macOS.entitlements
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          PROVISIONING_PROFILE_SPECIFIER: "ezvpn Developer ID sysex"

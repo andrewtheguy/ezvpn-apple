@@ -57,28 +57,19 @@ Prerequisites you set up once on Apple's side (this script cannot):
   * A "Developer ID Application" certificate in your login keychain
     (Xcode › Settings › Accounts › Manage Certificates › + › Developer ID
     Application). Without it the signing step fails.
-  * Developer ID provisioning profiles for the app and the extension in
-    ~/Library/Developer/Xcode/UserData/Provisioning Profiles. Xcode generates
-    these ("Mac Team Direct Provisioning Profile: <bundle id>") the first time
-    you run a Direct Distribution from the Organizer or any
-    `xcodebuild -exportArchive -allowProvisioningUpdates` with method
-    developer-id, and they stay valid for years.
+  * The manually managed Developer ID provisioning profiles "ezvpn Developer ID
+    app" and "ezvpn Developer ID sysex" (created once on the portal via the App
+    Store Connect API, profileType MAC_APP_DIRECT). project.yml pins them by
+    name for Release macOS builds; -allowProvisioningUpdates downloads them
+    automatically on a fresh machine.
   * An App Store Connect API key for notarization (the .p8 above).
 
-How developer-id signing works here: xcodebuild cannot produce this build by
-itself — automatic signing always archives with a development identity, whose
-profile does not grant the "-systemextension" networkextension entitlement the
-Release entitlements request, and manual signing rejects the Xcode-managed
-Developer ID profiles. So the script archives the app UNSIGNED, then signs
-everything itself with codesign: renders the Release entitlements (expanding
-the keychain access group and adding the application-/team-identifier pairs
-Xcode would add), embeds the Developer ID provisioning profiles, and signs
-inside-out with the Hardened Runtime and a secure timestamp — exactly the
-bundle layout Xcode's own Direct Distribution produces.
-
-method=debugging still archives + exports through xcodebuild with automatic
-development signing (-allowProvisioningUpdates), which needs an Apple Developer
-account signed in to Xcode.
+Release macOS builds sign manually with Developer ID (wired in project.yml):
+automatic signing can only archive with a development identity, whose profile
+cannot grant the "-systemextension" networkextension value the Release
+entitlements request. method=debugging archives + exports with automatic
+development signing instead, which needs an Apple Developer account signed in
+to Xcode.
 
 Environment overrides:
   TEAM_ID, CONFIGURATION, METHOD, ARCHIVE_PATH, EXPORT_PATH, DMG_PATH,
@@ -179,65 +170,13 @@ if [[ "$NOTARIZE" -eq 1 ]]; then
   fi
 fi
 
-# Locate the newest Developer ID (direct-distribution) provisioning profile for
-# a full application identifier ("TEAM.bundle.id") among the profiles Xcode has
-# downloaded. Direct-distribution profiles are the ones with no
-# ProvisionedDevices allowlist (development profiles always carry one).
-find_direct_profile() {
-  local app_id="$1" dir f plist appid created best="" best_created=""
-  for dir in \
-    "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
-    "$HOME/Library/MobileDevice/Provisioning Profiles"; do
-    [[ -d "$dir" ]] || continue
-    for f in "$dir"/*.provisionprofile; do
-      [[ -e "$f" ]] || continue
-      plist="$(/usr/bin/security cms -D -i "$f" 2>/dev/null)" || continue
-      appid="$(printf '%s' "$plist" | /usr/bin/plutil -extract 'Entitlements.com\.apple\.application-identifier' raw -o - - 2>/dev/null)" || continue
-      [[ "$appid" == "$app_id" ]] || continue
-      printf '%s' "$plist" | /usr/bin/plutil -extract ProvisionedDevices raw -o - - >/dev/null 2>&1 && continue
-      created="$(printf '%s' "$plist" | /usr/bin/plutil -extract CreationDate raw -o - - 2>/dev/null || echo "")"
-      if [[ -z "$best" || "$created" > "$best_created" ]]; then
-        best="$f"; best_created="$created"
-      fi
-    done
-  done
-  [[ -n "$best" ]] || return 1
-  printf '%s\n' "$best"
-}
-
-# Render an entitlements file the way Xcode does when signing with a profile:
-# expand the keychain access group build setting (must match KEYCHAIN_ACCESS_GROUP
-# in project.yml) and add the application-/team-identifier entitlements a macOS
-# app must carry alongside an embedded provisioning profile.
-render_entitlements() {
-  local src="$1" dst="$2" bundle_id="$3"
-  /usr/bin/sed "s/\$(KEYCHAIN_ACCESS_GROUP)/${TEAM_ID}.ezvpn.shared/g" "$src" > "$dst"
-  /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string ${TEAM_ID}.${bundle_id}" "$dst"
-  /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string ${TEAM_ID}" "$dst"
-}
-
-# Resolve every Developer-ID signing asset up front so a missing certificate or
-# profile fails fast, before the long archive step.
+# Fail fast, before the long archive step, if the Developer ID certificate is
+# missing. The two named provisioning profiles project.yml pins need no check:
+# -allowProvisioningUpdates downloads manually managed profiles on demand.
 if [[ "$METHOD" == "developer-id" ]]; then
-  BUNDLE_ID_PREFIX="$(detect_xcconfig_var BUNDLE_ID_PREFIX || true)"
-  [[ -n "$BUNDLE_ID_PREFIX" ]] || \
-    die "BUNDLE_ID_PREFIX not found in Developer.local.xcconfig or Developer.xcconfig"
-  APP_BUNDLE_ID="$BUNDLE_ID_PREFIX"
-  SYSEX_BUNDLE_ID="$BUNDLE_ID_PREFIX.PacketTunnel"
-
   SIGN_IDENTITY="$(/usr/bin/security find-identity -v -p codesigning | \
     /usr/bin/awk -v team="($TEAM_ID)" '/Developer ID Application/ && index($0, team) { print $2; exit }')"
   [[ -n "$SIGN_IDENTITY" ]] || die "no 'Developer ID Application' certificate for team $TEAM_ID in the keychain — create one in Xcode › Settings › Accounts › Manage Certificates"
-
-  APP_PROFILE="$(find_direct_profile "$TEAM_ID.$APP_BUNDLE_ID" || true)"
-  SYSEX_PROFILE="$(find_direct_profile "$TEAM_ID.$SYSEX_BUNDLE_ID" || true)"
-  for pair in "$APP_BUNDLE_ID=$APP_PROFILE" "$SYSEX_BUNDLE_ID=$SYSEX_PROFILE"; do
-    [[ -n "${pair#*=}" ]] || die "no Developer ID provisioning profile found for ${pair%%=*} — run one Direct Distribution from Xcode's Organizer (or any 'xcodebuild -exportArchive -allowProvisioningUpdates' with method developer-id) so Xcode generates it"
-  done
-  echo "Signing assets:"
-  printf '  identity:      %s\n' "$SIGN_IDENTITY"
-  printf '  app profile:   %s\n' "$APP_PROFILE"
-  printf '  sysex profile: %s\n' "$SYSEX_PROFILE"
 fi
 
 /bin/mkdir -p "$(/usr/bin/dirname "$ARCHIVE_PATH")"
@@ -257,18 +196,9 @@ printf '  method:        %s\n' "$METHOD"
 printf '  team:          %s\n' "$TEAM_ID"
 
 # generic/platform=macOS + -sdk macosx selects the native macos-arm64 slice of
-# the two-platform libezvpn.xcframework (see CLAUDE.md).
-#
-# developer-id archives UNSIGNED: automatic signing would archive with a
-# development identity whose profile cannot grant the Release entitlements'
-# "-systemextension" networkextension value, and manual signing rejects the
-# Xcode-managed Developer ID profiles — so signing happens below with codesign.
-if [[ "$METHOD" == "developer-id" ]]; then
-  ARCHIVE_SIGNING_ARGS=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO)
-else
-  ARCHIVE_SIGNING_ARGS=(-allowProvisioningUpdates)
-fi
-
+# the two-platform libezvpn.xcframework (see CLAUDE.md). For developer-id the
+# Release build settings in project.yml sign the archive with Developer ID
+# directly (manual style + the two named manually managed profiles).
 xcodebuild archive \
   -project "$PROJECT_ROOT/${PROJECT_NAME}.xcodeproj" \
   -scheme "$SCHEME" \
@@ -276,7 +206,7 @@ xcodebuild archive \
   -destination "generic/platform=macOS" \
   -sdk macosx \
   -archivePath "$ARCHIVE_PATH" \
-  "${ARCHIVE_SIGNING_ARGS[@]}" \
+  -allowProvisioningUpdates \
   DEVELOPMENT_TEAM="$TEAM_ID"
 
 /bin/mkdir -p "$EXPORT_PATH"
@@ -288,39 +218,10 @@ trap cleanup EXIT
 APP_PATH="$EXPORT_PATH/${APP_NAME}.app"
 
 if [[ "$METHOD" == "developer-id" ]]; then
+  # The archive is already fully Developer-ID-signed; just take the app out.
   ARCHIVE_APP="$ARCHIVE_PATH/Products/Applications/${APP_NAME}.app"
   [[ -d "$ARCHIVE_APP" ]] || die "archive did not produce $ARCHIVE_APP"
   /usr/bin/ditto "$ARCHIVE_APP" "$APP_PATH"
-
-  echo "Signing with Developer ID (codesign)…"
-  APP_ENTITLEMENTS="$TEMP_DIR/app.entitlements"
-  SYSEX_ENTITLEMENTS="$TEMP_DIR/sysex.entitlements"
-  render_entitlements "$PROJECT_ROOT/Sources/Ezvpn/Ezvpn.macOS.entitlements" \
-    "$APP_ENTITLEMENTS" "$APP_BUNDLE_ID"
-  render_entitlements "$PROJECT_ROOT/Sources/PacketTunnel/PacketTunnel.macOS.entitlements" \
-    "$SYSEX_ENTITLEMENTS" "$SYSEX_BUNDLE_ID"
-
-  # Hardened Runtime + secure timestamp on every code object: both are
-  # notarization requirements.
-  SIGN=(/usr/bin/codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY")
-
-  # Sign inside-out: the system extension's nested code, the extension itself,
-  # then the app's frameworks, then the app (whose signature seals everything).
-  SYSEX_BUNDLE="$(/bin/ls -d "$APP_PATH/Contents/Library/SystemExtensions/"*.systemextension 2>/dev/null | /usr/bin/head -n 1)"
-  [[ -n "$SYSEX_BUNDLE" ]] || die "no .systemextension found inside $APP_PATH"
-  while IFS= read -r -d '' nested; do
-    "${SIGN[@]}" "$nested"
-  done < <(/usr/bin/find "$SYSEX_BUNDLE/Contents/Frameworks" -maxdepth 1 \
-             \( -name '*.framework' -o -name '*.dylib' \) -print0 2>/dev/null)
-  /bin/cp "$SYSEX_PROFILE" "$SYSEX_BUNDLE/Contents/embedded.provisionprofile"
-  "${SIGN[@]}" --entitlements "$SYSEX_ENTITLEMENTS" "$SYSEX_BUNDLE"
-
-  while IFS= read -r -d '' nested; do
-    "${SIGN[@]}" "$nested"
-  done < <(/usr/bin/find "$APP_PATH/Contents/Frameworks" -maxdepth 1 \
-             \( -name '*.framework' -o -name '*.dylib' \) -print0 2>/dev/null)
-  /bin/cp "$APP_PROFILE" "$APP_PATH/Contents/embedded.provisionprofile"
-  "${SIGN[@]}" --entitlements "$APP_ENTITLEMENTS" "$APP_PATH"
 
   echo "Verifying signature…"
   /usr/bin/codesign --verify --strict --deep --verbose=2 "$APP_PATH"
