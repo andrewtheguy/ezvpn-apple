@@ -76,14 +76,17 @@ Network Extension owns the `utun` interface, routing, and IP/MTU config.
 
 ### macOS — ready to run
 
-The **Release macOS DMG (Manual)** workflow
-(`.github/workflows/release-macos.yml`) publishes a **signed, notarized,
-drag-to-Applications `.dmg`** as a GitHub prerelease. This is a click-to-run
-download — **no Apple Developer account required to use it**: download the
-`.dmg`, drag **ezvpn** to Applications, launch it, and approve the network
-extension once in System Settings. See
-[docs/distribution-macos.md](docs/distribution-macos.md) for how the DMG is
-built (locally or in CI).
+Download the latest `.dmg` from the
+[**Releases page**](https://github.com/flexaccessdev/ezvpn-apple/releases). It is
+a **signed, notarized, drag-to-Applications** disk image — a click-to-run
+download, **no Apple Developer account required to use it**: download the `.dmg`,
+drag **ezvpn** to Applications, launch it, and approve the network extension once
+in System Settings.
+
+The DMG is produced by the **Release macOS DMG (Manual)** workflow
+(`.github/workflows/release-macos.yml`), which publishes it as a GitHub
+prerelease. See [docs/distribution-macos.md](docs/distribution-macos.md) for how
+the DMG is built (locally or in CI).
 
 ### iOS — you must build and sign it yourself
 
