@@ -35,8 +35,8 @@ jobs:
 
       - name: Write signing xcconfig
         env:
-          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-          BUNDLE_ID_PREFIX: ${{ secrets.BUNDLE_ID_PREFIX }}
+          DEVELOPMENT_TEAM: ${{ vars.DEVELOPMENT_TEAM }}
+          BUNDLE_ID_PREFIX: ${{ vars.BUNDLE_ID_PREFIX }}
         run: |
           set -euo pipefail
           [[ -n "$DEVELOPMENT_TEAM" ]] || { echo "::error::secret DEVELOPMENT_TEAM is empty"; exit 1; }

@@ -53,13 +53,22 @@ runner and uploads the notarized `.dmg` as a workflow artifact. It is
 `workflow_dispatch`-only (never on push/PR) and limited to one run at a time, so
 the signing identity and API key are never exposed to untrusted code.
 
-It supplies from **repository secrets** what the script normally reads from your
-local keychain and `Developer.local.xcconfig`:
+It supplies from **repository configuration** what the script normally reads from
+your local keychain and `Developer.local.xcconfig`. Two non-sensitive values are
+plaintext **Actions variables** (Settings › Secrets and variables › Actions ›
+**Variables**); the rest are encrypted **secrets**:
 
-| Secret | What it is | How to produce the value |
+**Variables** (`vars.*`):
+
+| Variable | What it is | Value |
 |---|---|---|
 | `DEVELOPMENT_TEAM` | your Apple Developer Team ID | copy it from the portal (e.g. `5J7W998Y8H`) |
 | `BUNDLE_ID_PREFIX` | a reverse-DNS prefix your team owns; **must** match the pinned App IDs / profiles (not the `com.example.ezvpn` placeholder) | the prefix you registered, e.g. `com.yourteam.ezvpn` |
+
+**Secrets** (`secrets.*`):
+
+| Secret | What it is | How to produce the value |
+|---|---|---|
 | `DEVELOPER_ID_CERT_P12` | base64 of your "Developer ID Application" cert, **exported with its private key** | Keychain Access → export the identity as `.p12`, then `base64 -i DeveloperID.p12 \| pbcopy` |
 | `DEVELOPER_ID_CERT_PASSWORD` | the password you set on that `.p12` export | (as typed during export) |
 | `KEYCHAIN_PASSWORD` | any random string; used only for the throwaway CI keychain | `openssl rand -base64 24` |
