@@ -156,7 +156,9 @@ targets:
         KEYCHAIN_ACCESS_GROUP: "$(AppIdentifierPrefix)ezvpn.shared"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: Sources/Ezvpn/Ezvpn.entitlements
-        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Sources/Ezvpn/Ezvpn.macOS.entitlements
+        # macOS entitlements vary by config: Debug (development signing) grants
+        # the base networkextension value, Release (Developer ID) the
+        # "-systemextension" variant. See the two Ezvpn.macOS[.debug].entitlements.
         "ARCHS[sdk=macosx*]": arm64
         "LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]": "@executable_path/../Frameworks"
         # Developer ID distribution requires the Hardened Runtime (a
@@ -167,6 +169,11 @@ targets:
         INFOPLIST_FILE: Sources/Ezvpn/Info.plist
         MARKETING_VERSION: "0.0.23"
         CURRENT_PROJECT_VERSION: "1"
+      configs:
+        Debug:
+          "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Sources/Ezvpn/Ezvpn.macOS.debug.entitlements
+        Release:
+          "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Sources/Ezvpn/Ezvpn.macOS.entitlements
     dependencies:
       # The packet-tunnel provider ships as an app extension on iOS (the only
       # option there) and a system extension on macOS (required for Developer ID
@@ -239,7 +246,14 @@ targets:
       - Sources/PacketTunnelSysEx
     settings:
       base:
-        CODE_SIGN_ENTITLEMENTS: Sources/PacketTunnel/PacketTunnel.macOS.entitlements
         INFOPLIST_FILE: Sources/PacketTunnel/Info-macOS.plist
         # Notarization prerequisite; the containing app enables it too.
         ENABLE_HARDENED_RUNTIME: YES
+      configs:
+        # Entitlements vary by config like the app target: Debug (development
+        # signing) uses the base networkextension value, Release (Developer ID)
+        # the "-systemextension" variant.
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: Sources/PacketTunnel/PacketTunnel.macOS.debug.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: Sources/PacketTunnel/PacketTunnel.macOS.entitlements

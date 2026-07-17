@@ -220,7 +220,17 @@ One-time Apple-side setup (the script cannot do these for you):
 
 1. Create a **Developer ID Application** certificate: Xcode › Settings ›
    Accounts › Manage Certificates › **+** › *Developer ID Application*.
-2. Create an **App Store Connect API key** for notarization (App Store Connect ›
+2. Get the **Developer ID provisioning profiles** for the app and the extension
+   onto the machine (`~/Library/Developer/Xcode/UserData/Provisioning Profiles`).
+   Xcode generates them ("Mac Team Direct Provisioning Profile: …") the first
+   time you run a Direct Distribution from the Organizer, or any
+   `xcodebuild -exportArchive -allowProvisioningUpdates` with method
+   developer-id; they then stay valid for years. The script signs with
+   `codesign` directly because xcodebuild cannot: automatic signing archives
+   with a development identity that cannot carry the release entitlements'
+   `packet-tunnel-provider-systemextension` value, and manual signing refuses
+   Xcode-managed profiles.
+3. Create an **App Store Connect API key** for notarization (App Store Connect ›
    Users and Access › Integrations › App Store Connect API) and download its
    `AuthKey_XXXX.p8`. Cache it as a notarytool profile once:
 
