@@ -228,10 +228,16 @@ private final class InMemoryAuthTokenKeychain {
     private func copyMatching(
         _ query: [String: Any]
     ) -> AuthTokenKeychainClient.Result {
-        // Identity query (service + account): return the ref or the data,
-        // mirroring the real Keychain's kSecReturn* handling.
+        // Identity query (class + service + account): return the ref or the
+        // data, mirroring the real Keychain's kSecReturn* handling. A query
+        // with the right account but a mismatched service or class matches
+        // nothing.
         if let account = query[kSecAttrAccount as String] as? String {
-            guard let item = items[account] else {
+            let classMatches =
+                (query[kSecClass as String] as? String) == (kSecClassGenericPassword as String)
+            let serviceMatches =
+                (query[kSecAttrService as String] as? String) == AuthTokenKeychain.service
+            guard classMatches, serviceMatches, let item = items[account] else {
                 return (errSecItemNotFound, nil)
             }
             if query[kSecReturnPersistentRef as String] as? Bool == true {

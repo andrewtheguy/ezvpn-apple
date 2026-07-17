@@ -108,12 +108,12 @@ enum AuthTokenKeychain {
     #endif
 
     /// Resolve the token by item identity (service + profile UUID + access
-    /// group) in the data-protection keychain. macOS uses this everywhere:
-    /// the packet-tunnel system extension is a root daemon with no legacy
-    /// keychain search list, and resolving a persistent reference routes
-    /// through the legacy engine, which fails there with errSecNotAvailable
-    /// ("No keychain is available"). An identity query stays entirely in the
-    /// data-protection keychain, which daemons can read.
+    /// group) in the data-protection keychain. This is the macOS app-side
+    /// lookup only: it runs in the user context, where the data-protection
+    /// keychain is available. The packet-tunnel system extension runs as a
+    /// root daemon with no user context and cannot read the data-protection
+    /// keychain; it must use daemonToken(for:) against the System keychain
+    /// instead (see the daemon-side storage section below).
     static func token(
         forProfileID profileID: UUID,
         client: AuthTokenKeychainClient = .security

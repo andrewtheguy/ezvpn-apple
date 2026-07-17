@@ -181,9 +181,25 @@ fi
 
 /bin/mkdir -p "$(/usr/bin/dirname "$ARCHIVE_PATH")"
 
+# Guard against a mistyped or externally-pointed output path (these are
+# user-overridable via --archive-path/--export-path or the environment): refuse
+# to recursively delete an empty path, the filesystem root, the home directory,
+# or the project root itself.
+assert_safe_to_remove() {
+  local path="$1" parent resolved
+  parent="$(cd "$(/usr/bin/dirname "$path")" 2>/dev/null && pwd)" \
+    || die "refusing to 'rm -rf' $path (parent directory does not resolve)"
+  resolved="$parent/$(/usr/bin/basename "$path")"
+  case "$resolved" in
+    "/"|"$HOME"|"$PROJECT_ROOT")
+      die "refusing to 'rm -rf' $path (resolves to $resolved)" ;;
+  esac
+}
+
 # Clear prior outputs so a mid-flight failure can't leave stale artifacts.
 for path in "$ARCHIVE_PATH" "$EXPORT_PATH"; do
   if [[ -e "$path" ]]; then
+    assert_safe_to_remove "$path"
     echo "Replacing existing: $path"
     /bin/rm -rf "$path"
   fi
@@ -300,8 +316,7 @@ echo "Stapling notarization ticket…"
 /usr/bin/xcrun stapler staple "$DMG_PATH"
 
 echo "Verifying Gatekeeper acceptance…"
-/usr/sbin/spctl -a -t open --context context:primary-signature -vv "$DMG_PATH" || \
-  echo "warning: spctl assessment reported an issue; inspect the output above."
+/usr/sbin/spctl -a -t open --context context:primary-signature -vv "$DMG_PATH"
 
 echo
 echo "Done: notarized, stapled disk image at $DMG_PATH"
