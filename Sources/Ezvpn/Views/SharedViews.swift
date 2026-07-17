@@ -38,9 +38,15 @@ extension View {
         // (empty) title and butts the control against it on the right, so short
         // text sits flush right. We already show our own label via LabeledField,
         // so hide the built-in one: the control then fills the row and left-aligns.
+        //
+        // The default plain style renders borderless in a grouped Form — the field
+        // looks like static text and gives no visible click target to focus. A
+        // rounded border draws an obvious box that fills the row and is easy to
+        // click anywhere inside.
         autocorrectionDisabled()
             .labelsHidden()
             .multilineTextAlignment(.leading)
+            .textFieldStyle(.roundedBorder)
         #endif
     }
 
