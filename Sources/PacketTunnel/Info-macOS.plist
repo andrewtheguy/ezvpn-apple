@@ -22,6 +22,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>EZVPNKeychainAccessGroup</key>
 	<string>$(KEYCHAIN_ACCESS_GROUP)</string>
+	<!-- Required for the network_extension system-extension category; shown to
+	     the user in the System Settings approval flow. Activation fails without
+	     it ("require the presence of the 'NSSystemExtensionUsageDescription'
+	     property"). -->
+	<key>NSSystemExtensionUsageDescription</key>
+	<string>ezvpn uses this network extension to run its VPN tunnel.</string>
 	<!-- System extensions declare their provider through NetworkExtension /
 	     NEProviderClasses (the .appex NSExtension mechanism does not apply). The
 	     key maps the packet-tunnel extension point to the same principal class

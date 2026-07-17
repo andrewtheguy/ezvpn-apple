@@ -255,9 +255,20 @@ if [[ "$NOTARIZE" -eq 0 ]]; then
   exit 0
 fi
 
+# Notarize + staple the .app FIRST (sysextd refuses a Developer-ID system
+# extension whose app is not notarized — "code signature invalid" — and a
+# stapled app validates offline once copied out of the disk image), then
+# package the stapled app into the .dmg and notarize + staple that too.
+echo "Notarizing the app (this uploads to Apple and waits for the result)…"
+APP_ZIP="$TEMP_DIR/${APP_NAME}.zip"
+/usr/bin/ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP"
+/usr/bin/xcrun notarytool submit "$APP_ZIP" "${NOTARY_ARGS[@]}" --wait
+
+echo "Stapling notarization ticket to the app…"
+/usr/bin/xcrun stapler staple "$APP_PATH"
+
 # Package the .dmg (drag-to-Applications), then notarize + staple the .dmg so
-# the whole disk image — and the app inside it — carries a stapled ticket that
-# Gatekeeper verifies offline on any Mac.
+# the disk image itself also passes Gatekeeper offline.
 VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "0")"
 [[ -n "$DMG_PATH" ]] || DMG_PATH="$PROJECT_ROOT/build/${APP_NAME}-${VERSION}.dmg"
 [[ "$DMG_PATH" == *.dmg ]] || die "--dmg-path must end in .dmg"

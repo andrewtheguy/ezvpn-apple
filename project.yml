@@ -256,6 +256,15 @@ targets:
       - Sources/PacketTunnelSysEx
     settings:
       base:
+        # sysextd only matches an extension whose bundle is NAMED after its
+        # bundle identifier (…/SystemExtensions/<bundle id>.systemextension);
+        # any other name fails activation with OSSystemExtensionError code 4
+        # "Extension not found in App bundle". Same convention as Apple's
+        # network/DriverKit samples. Keep the Swift module name stable and
+        # valid (dots aren't) via PRODUCT_MODULE_NAME — Info-macOS.plist derives
+        # the provider class name from it.
+        PRODUCT_NAME: $(PRODUCT_BUNDLE_IDENTIFIER)
+        PRODUCT_MODULE_NAME: PacketTunnelSysEx
         INFOPLIST_FILE: Sources/PacketTunnel/Info-macOS.plist
         # Notarization prerequisite; the containing app enables it too.
         ENABLE_HARDENED_RUNTIME: YES
