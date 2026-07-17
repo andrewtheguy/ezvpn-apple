@@ -49,9 +49,11 @@ only on machines registered to your team). Run `--help` for all options.
 
 The **Release macOS DMG (Manual)** workflow
 (`.github/workflows/release-macos.yml`) runs the same script on a `macos-latest`
-runner and uploads the notarized `.dmg` as a workflow artifact. It is
-`workflow_dispatch`-only (never on push/PR) and limited to one run at a time, so
-the signing identity and API key are never exposed to untrusted code.
+runner and publishes the notarized `.dmg` as a GitHub **prerelease** (tagged
+`macos-<timestamp>-<sha>`) — the ready-to-run download for end users, no Apple
+account required to install it. It is `workflow_dispatch`-only (never on push/PR)
+and limited to one run at a time, so the signing identity and API key are never
+exposed to untrusted code.
 
 It supplies from **repository configuration** what the script normally reads from
 your local keychain and `Developer.local.xcconfig`. Two non-sensitive values are

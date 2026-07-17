@@ -72,38 +72,37 @@ Network Extension owns the `utun` interface, routing, and IP/MTU config.
 - [docs/architecture.md](docs/architecture.md) — how the app, extension, and
   Rust core fit together; logs; and operational notes.
 
-## Prebuilt downloads (GitHub Releases)
+## Downloads (GitHub Releases)
 
-The **Release iOS (Manual)** workflow
-(`.github/workflows/release-ios.yml`) attaches an **unsigned** iOS app bundle to
-each GitHub release, built with `CODE_SIGNING_ALLOWED=NO` (so it needs no signing
-secrets):
+### macOS — ready to run
+
+The **Release macOS DMG (Manual)** workflow
+(`.github/workflows/release-macos.yml`) publishes a **signed, notarized,
+drag-to-Applications `.dmg`** as a GitHub prerelease. This is a click-to-run
+download — **no Apple Developer account required to use it**: download the
+`.dmg`, drag **ezvpn** to Applications, launch it, and approve the network
+extension once in System Settings. See
+[docs/distribution-macos.md](docs/distribution-macos.md) for how the DMG is
+built (locally or in CI).
+
+### iOS — you must build and sign it yourself
+
+There is **no ready-to-run iOS download.** The **Release iOS (Manual)** workflow
+(`.github/workflows/release-ios.yml`) only attaches an **unsigned** bundle for
+build verification and inspection:
 
 - `ezvpn-ios-unsigned.tar.gz` — the iOS `ezvpn.app` (`ios-arm64`, device only).
 
-**This is not a click-to-run download.** A Packet Tunnel Provider uses the
-restricted `com.apple.developer.networking.networkextension` entitlement: the
-system will not load the network extension unless the app *and* the extension
-are signed with a provisioning profile that grants that capability. The tarball
-exists for build verification and inspection — running the tunnel always
-requires signing under a real team.
+**This is not installable as-is, and it cannot be re-signed into a working app.**
+A Packet Tunnel Provider uses the restricted
+`com.apple.developer.networking.networkextension` entitlement, which requires
+**explicit, non-wildcard App IDs registered to your own paid team** — a shared
+id can't be reused across accounts. So running the iOS app means **building from
+source under your own team**, not re-signing the download.
 
-For macOS, there is no unsigned download: Gatekeeper blocks an unsigned bundle
-outright, so the macOS app is distributed as a signed, notarized `.dmg` — build
-it locally or via the **Release macOS DMG (Manual)** workflow (see
-[docs/distribution-macos.md](docs/distribution-macos.md)).
-
-### What another developer has to do to run it
-
-You must sign it under your **own** paid Apple Developer team, which means
-**building from source, not re-signing the download** — the app's bundle id is
-compiled in, so it can't be repointed inside a prebuilt bundle. The committed
-bundle-id prefix is the placeholder `com.example.ezvpn` (registered to no team,
-so the release builds are unsigned); the Network Extension needs explicit,
-non-wildcard App IDs your team owns, so you supply your own prefix and build.
-
-So follow [docs/building.md](docs/building.md): copy
+Follow [docs/building.md](docs/building.md): copy
 `Developer.local.xcconfig.sample` to `Developer.local.xcconfig`, set your
 `DEVELOPMENT_TEAM` **and** a `BUNDLE_ID_PREFIX` your team owns,
-`xcodegen generate`, then build with `scripts/run-macos.sh` (macOS) or
-`scripts/run-device-ios.sh <DEVICE_ID>` (iOS). Xcode signs it as it builds.
+`xcodegen generate`, then build with `scripts/run-device-ios.sh <DEVICE_ID>`.
+Xcode signs it as it builds. (Building the macOS app from source works the same
+way with `scripts/run-macos.sh`.)
