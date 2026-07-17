@@ -60,16 +60,31 @@ jobs:
           CERT_PATH="$RUNNER_TEMP/developer-id.p12"
 
           echo "$CERT_P12" | base64 --decode > "$CERT_PATH"
+          [[ -s "$CERT_PATH" ]] || {
+            echo "::error::DEVELOPER_ID_CERT_P12 decoded to an empty file — is the secret set?"
+            exit 1
+          }
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security import "$CERT_PATH" -P "$CERT_PASSWORD" -f pkcs12 -k "$KEYCHAIN" \
             -T /usr/bin/codesign -T /usr/bin/xcodebuild -T /usr/bin/security
-          # Let codesign use the private key without a GUI password prompt.
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
           # Prepend our keychain to the search list, preserving the existing ones.
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
+
+          # Confirm a full signing identity (certificate AND private key) landed
+          # before touching its ACL: set-key-partition-list otherwise fails with
+          # the cryptic "SecItemCopyMatching: item could not be found". The most
+          # common cause is a .p12 exported without its private key.
+          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -q "Developer ID Application"; then
+            echo "::error::no 'Developer ID Application' identity after import — DEVELOPER_ID_CERT_P12 must be a .p12 exported WITH its private key (export the identity from Keychain Access, not just the certificate) and DEVELOPER_ID_CERT_PASSWORD must match its export password"
+            security find-identity -v "$KEYCHAIN" || true
+            exit 1
+          fi
+
+          # Let codesign use the private key without a GUI password prompt.
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
 
           rm -f "$CERT_PATH"
 
