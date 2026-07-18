@@ -1,6 +1,6 @@
 # ezvpn-apple
 
-A universal native iOS + macOS SwiftUI app running the [`ezvpn`](../ezvpn)
+A universal native iOS + macOS SwiftUI app running the [`ezvpn`](https://github.com/flexaccessdev/ezvpn)
 IP-over-QUIC tunnel. The packet-tunnel provider ships as an **app extension on
 iOS** and a **system extension on macOS** (the packaging Apple requires for
 Developer ID distribution outside the App Store). **Scope:** dual-stack **split
