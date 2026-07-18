@@ -9,7 +9,7 @@ ID + notarization (`scripts/create-archive-macos.sh`).
 
 It links `libezvpn.xcframework` (the Rust core, built from the sibling `../ezvpn`
 repo and delivered via a local Swift package) into a `NEPacketTunnelProvider`.
-The Rust side does the iroh connect + handshake + datagram loop; the Apple
+The Rust side does the iroh connect + handshake + reliable QUIC stream loop; the Apple
 Network Extension owns the `utun` interface, routing, and IP/MTU config.
 
 ## What this app does and does not do
@@ -19,16 +19,18 @@ Network Extension owns the `utun` interface, routing, and IP/MTU config.
   Add/edit/rename/delete profiles; connect one at a time (activating a second
   automatically tears down the first). All profiles share the one PacketTunnel
   extension. Non-secret settings live in `providerConfiguration`; the auth
-  token is a device-only data-protection Keychain item shared with the extension
-  through a keychain access group, and the VPN protocol stores only its
-  persistent reference.
+  token is never stored in `providerConfiguration`. On iOS it is a device-only
+  data-protection Keychain item shared with the extension through a keychain
+  access group, and the VPN protocol stores only its persistent reference. On
+  macOS the app passes the token in `startTunnel(options:)`; the root system
+  extension persists it in the System keychain for OS-initiated restarts.
 - ✅ IPv4/IPv6 split tunnel. The server gateway/interface routes are always
   routed automatically; extra IPv4 and IPv6 CIDRs are optional.
 - ✅ Optional tunnel DNS on iOS, including match domains for conditional
   forwarding because iOS ignores installed DNS profiles while a VPN is active.
   The macOS build leaves the system's DNS configuration untouched.
 - ✅ Connects to an `ezvpn` server over iroh (direct or relay), handshakes,
-  tunnels IP over QUIC datagrams.
+  and tunnels framed IP packets over a reliable QUIC stream.
 - ✅ Underlay-bypass routing, like the desktop client's bootstrap bypass: at
   connect, the core computes every relay IP plus the server's candidate
   underlay addresses, and any **global-scope** address a routed prefix would

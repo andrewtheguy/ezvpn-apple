@@ -8,7 +8,7 @@ import TunnelCore
 ///
 /// It bridges Apple's `NEPacketTunnelProvider` to the Rust core (libezvpn.a):
 /// configure the tunnel interface from the server's handshake, hand the `utun`
-/// fd to Rust, and let Rust run the iroh/QUIC datagram loop.
+/// fd to Rust, and let Rust run the framed IP data loop over a reliable QUIC stream.
 class PacketTunnelProvider: NEPacketTunnelProvider {
     private let log = OSLog(subsystem: "ezvpn.PacketTunnel", category: "tunnel")
     private var handle: OpaquePointer?

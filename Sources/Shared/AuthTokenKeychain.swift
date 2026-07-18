@@ -37,12 +37,15 @@ struct AuthTokenKeychainClient {
     )
 }
 
-/// Shared Keychain storage for profile authentication tokens.
+/// Keychain storage for profile authentication tokens.
 ///
-/// The containing app creates and updates the item; the packet-tunnel
-/// extension resolves the persistent reference stored in
-/// `NETunnelProviderProtocol.passwordReference`. Both targets carry the same
-/// keychain-access-group entitlement.
+/// The containing app creates and updates a data-protection Keychain item. On
+/// iOS, the packet-tunnel extension resolves the persistent reference stored in
+/// `NETunnelProviderProtocol.passwordReference`; both targets carry the same
+/// keychain-access-group entitlement. On macOS, the root system extension
+/// cannot access the user's data-protection Keychain, so the app passes the
+/// token in start options and the provider keeps a separate System-keychain
+/// copy for OS-initiated restarts.
 enum AuthTokenKeychain {
     static let service = "ezvpn.auth-token"
     static let accessGroupInfoKey = "EZVPNKeychainAccessGroup"

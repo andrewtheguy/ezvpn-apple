@@ -11,7 +11,7 @@
 │                         │        │   ezvpn_connect(json) ───────┼──▶ libezvpn
 └─────────────────────────┘        │   setTunnelNetworkSettings   │    (iroh connect
                                     │   ezvpn_run(utun_fd) ────────┼──▶  + handshake
-                                    │  stopTunnel: ezvpn_stop      │     + datagram loop)
+                                    │  stopTunnel: ezvpn_stop      │     + stream loop)
                                     │  debug: ezvpn_conn_path      │
                                     └──────────────────────────────┘
 ```
