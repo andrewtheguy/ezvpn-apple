@@ -61,6 +61,31 @@ extension View {
     }
 }
 
+/// App version pulled from the bundle: "vMARKETING (BUILD)" — e.g. "v0.0.30 (12)".
+/// `CFBundleShortVersionString` is the marketing version, `CFBundleVersion` the
+/// build number; both come from project.yml (MARKETING_VERSION / CURRENT_PROJECT_VERSION).
+enum AppVersion {
+    static var displayString: String {
+        let info = Bundle.main.infoDictionary
+        let marketing = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "v\(marketing) (\(build))"
+    }
+}
+
+/// Version label anchored at the bottom of the home screen. Tertiary caption so
+/// it reads as a footnote and doesn't compete with the profile list.
+struct VersionFooter: View {
+    var body: some View {
+        Text(AppVersion.displayString)
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .accessibilityLabel(Text("App version \(AppVersion.displayString)"))
+    }
+}
+
 /// One row of the Active-routes debug section: a caption title over the CIDR
 /// list, monospaced, one per line; "none" when the list is empty (an empty
 /// bypass list is itself a useful signal — nothing was carved out).

@@ -52,6 +52,9 @@ struct TunnelListView: View {
                 SystemExtensionBanner(state: manager.systemExtensionState)
             }
             #endif
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VersionFooter()
+            }
         }
     }
 
