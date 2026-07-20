@@ -66,7 +66,8 @@ enum TunnelSnapshotDecoder {
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return TunnelConnectionSnapshot(paths: [], customRelays: []) }
 
-        let paths = (object["paths"] as? [[String: Any]] ?? []).compactMap { entry in
+        let paths: [TunnelConnectionPath] =
+            (object["paths"] as? [[String: Any]] ?? []).compactMap { entry in
             guard let display = entry["display"] as? String else { return nil }
             return TunnelConnectionPath(
                 kind: (entry["kind"] as? String).flatMap(TunnelConnectionPath.Kind.init) ?? .other,
@@ -74,7 +75,8 @@ enum TunnelSnapshotDecoder {
                 selected: entry["selected"] as? Bool ?? false
             )
         }
-        let relays = (object["custom_relays"] as? [[String: Any]] ?? []).compactMap { entry in
+        let relays: [TunnelCustomRelay] =
+            (object["custom_relays"] as? [[String: Any]] ?? []).compactMap { entry in
             guard let url = entry["url"] as? String else { return nil }
             return TunnelCustomRelay(
                 url: url,
