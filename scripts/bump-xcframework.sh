@@ -4,10 +4,12 @@
 # keep the app/extension marketing versions in sync with that release.
 # Downloads the release's libezvpn-apple.xcframework.zip, computes its SPM
 # checksum (the plain sha256 of the zip), rewrites the url + checksum lines, and
-# sets both MARKETING_VERSION values in project.yml from the tag.
+# sets both MARKETING_VERSION values in project.yml from the tag's numeric
+# version (Apple bundle marketing versions cannot contain prerelease suffixes).
 #
 # Usage:
 #   scripts/bump-xcframework.sh v0.0.14
+#   scripts/bump-xcframework.sh v0.0.33-alpha5
 #   scripts/bump-xcframework.sh            # defaults to the latest release tag
 set -euo pipefail
 
@@ -25,9 +27,10 @@ if [[ -z "$TAG" ]]; then
   TAG="$(gh release view --repo "$REPO" --json tagName --jq .tagName)"
 fi
 
-VERSION="${TAG#v}"
-[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || \
-  die "tag '$TAG' does not contain a valid Apple marketing version"
+RELEASE_VERSION="${TAG#v}"
+[[ "$RELEASE_VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || \
+  die "tag '$TAG' is not a supported release version"
+VERSION="${RELEASE_VERSION%%-*}"
 
 URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
